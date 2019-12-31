@@ -1,0 +1,770 @@
+/**
+ * @file osMBuf.c  Memory buffers
+ *
+ * Copyright (C) 2019 InterLogic
+ */
+#include <string.h>
+#include "osTypes.h"
+#include "osPL.h"
+#include "osMemory.h"
+#include "osMBuf.h"
+#include "osPrintf.h"
+#include "osDebug.h"
+#include "osMisc.h"
+
+
+enum {DEFAULT_SIZE=512};
+
+
+static void osMBuf_destructor(void *data)
+{
+	osMBuf_t *mb = data;
+
+	osMem_deref(mb->buf);
+}
+
+
+/**
+ * Allocate a new memory buffer
+ *
+ * @param size Initial buffer size
+ *
+ * @return New memory buffer, NULL if no memory
+ */
+osMBuf_t* osMBuf_alloc(size_t size)
+{
+	osMBuf_t *mb;
+
+	mb = osMem_zalloc(sizeof(*mb), osMBuf_destructor);
+	if (!mb)
+	{
+		return NULL;
+	}
+
+	if (osMBuf_realloc(mb, size ? size : DEFAULT_SIZE))
+	{
+		return osMem_deref(mb);
+	}
+
+	return mb;
+}
+
+
+/**
+ * Allocate a new mbuf with a reference to another mbuf, the new mbuf's buf points to the original mbuf's buf
+ *
+ * @param mbr Memory buffer to reference
+ *
+ * @return New memory buffer, NULL if no memory
+ */
+osMBuf_t *osMBuf_allocRef(osMBuf_t *mbr)
+{
+	osMBuf_t *mb;
+
+	if (!mbr)
+	{
+		return NULL;
+	}
+
+	mb = osMem_zalloc(sizeof(*mb), osMBuf_destructor);
+	if (!mb)
+	{
+		return NULL;
+	}
+
+	mb->buf  = osMem_ref(mbr->buf);
+	mb->size = mbr->size;
+	mb->pos  = mbr->pos;
+	mb->end  = mbr->end;
+
+	return mb;
+}
+
+//use the original buffer's pos
+void osMBuf_allocRef1(osMBuf_t* pDupMBuf, osMBuf_t* pOrigMBuf, size_t newPos, size_t len)
+{
+	if(!pDupMBuf || !pOrigMBuf)
+	{
+		return;
+	}
+
+	
+    pDupMBuf->buf = pOrigMBuf->buf;
+	pDupMBuf->size = pOrigMBuf->size;
+    pDupMBuf->pos = newPos;
+    pDupMBuf->end = newPos + len;
+}
+
+
+//reposition the pos to 0
+void osMBuf_allocRef2(osMBuf_t* pDupMBuf, osMBuf_t* pOrigMBuf, size_t newPos, size_t len)
+{
+    if(!pDupMBuf || !pOrigMBuf)
+    {
+        return;
+    }
+
+
+    pDupMBuf->buf = &pOrigMBuf->buf[pDupMBuf->pos];
+	pDupMBuf->pos = 0;
+	pDupMBuf->end = len;
+	pDupMBuf->size = len;
+}
+
+
+/**
+ * Initialize a memory buffer
+ *
+ * @param mb Memory buffer to initialize
+ */
+void osMBuf_init(osMBuf_t *mb)
+{
+	if (!mb)
+		return;
+
+	mb->buf  = NULL;
+	mb->size = 0;
+	mb->pos  = 0;
+	mb->end  = 0;
+}
+
+
+/**
+ * Reset a memory buffer
+ *
+ * @param mb Memory buffer to reset
+ */
+void osMBuf_reset(osMBuf_t *mb)
+{
+	if (!mb)
+	{
+		return;
+	}
+
+	mb->buf = osMem_deref(mb->buf);
+	osMBuf_init(mb);
+}
+
+
+void osMBuf_dealloc(osMBuf_t *mb)
+{
+	if(!mb)
+	{
+		return;
+	}
+
+	mb->buf = osMem_deref(mb->buf);
+	osMem_deref(mb);
+}
+
+
+/**
+ * Resize a memory buffer
+ *
+ * @param mb   Memory buffer to resize
+ * @param size New buffer size, if size=0, trim the unused buf
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_realloc(osMBuf_t *mb, size_t size)
+{
+	uint8_t *buf;
+
+	if (!mb)
+	{
+		return EINVAL;
+	}
+
+	if(!size)
+	{
+		size = mb->end;
+		if(!mb->end || mb->end == mb->size)
+		{
+			return 0;
+		}
+	}
+
+	buf = mb->buf ? osMem_realloc(mb->buf, size) : osMem_alloc(size, NULL);
+	if (!buf)
+	{
+		return ENOMEM;
+	}
+
+	mb->buf  = buf;
+	mb->size = size;
+
+	return 0;
+}
+
+
+
+/**
+ * Shift mbuf content position
+ *
+ * @param mb    Memory buffer to shift
+ * @param shift Shift offset count
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_shift(osMBuf_t *mb, ssize_t shift)
+{
+	size_t rsize;
+	uint8_t *p;
+
+	if (!mb)
+	{
+		return EINVAL;
+	}
+
+	if (((ssize_t)mb->pos + shift) < 0 || ((ssize_t)mb->end + shift) < 0)
+	{
+		return ERANGE;
+	}
+
+	rsize = mb->end + shift;
+
+	if (rsize > mb->size)
+	{
+		int err;
+
+		err = osMBuf_realloc(mb, rsize);
+		if (err)
+		{
+			return err;
+		}
+	}
+
+	p = osMBuf_getCurBuf(mb);
+
+	memmove(p + shift, p, osMBuf_getRemaining(mb));
+
+	mb->pos += shift;
+	mb->end += shift;
+
+	return 0;
+}
+
+
+/**
+ * Write a block of memory to a memory buffer starting from the current mbuf position
+ *
+ * @param mb   Memory buffer
+ * @param buf  Memory block to write
+ * @param size Number of bytes to write
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_writeBuf(osMBuf_t *mb, const uint8_t *buf, size_t size, bool isAdvancePos)
+{
+	size_t rsize;
+
+	if (!mb || !buf)
+	{
+		return EINVAL;
+	}
+
+	rsize = mb->pos + size;
+
+	if (rsize > mb->size)
+	{
+		const size_t dsize = mb->size ? (mb->size * 2) : DEFAULT_SIZE;
+
+		int err;
+		err = osMBuf_realloc(mb, MAX(rsize, dsize));
+		if (err)
+		{
+			return err;
+		}
+	}		
+
+	memcpy(mb->buf + mb->pos, buf, size);
+
+	if(isAdvancePos)
+	{
+		mb->pos += size;
+		mb->end  = MAX(mb->end, mb->pos);
+	}
+	else
+	{
+		mb->end  = MAX(mb->end, mb->pos + size);
+	}
+
+	return 0;
+}
+
+//copy the srcmb buf between the startPos and stopPos (the characters including startPos until stopPos-1) to destmb.  
+int osMBuf_writeBufRange(osMBuf_t *destmb, const osMBuf_t *srcmb, size_t startPos, size_t stopPos, bool isAdvancePos)
+{
+    size_t rsize;
+	size_t size= stopPos-startPos;
+
+    if (!destmb || !srcmb || stopPos < startPos)
+    {
+        return EINVAL;
+    }
+
+    rsize = destmb->pos + size;
+
+    if (rsize > destmb->size)
+    {
+        const size_t dsize = destmb->size ? (destmb->size * 2) : DEFAULT_SIZE;
+
+        int err;
+        err = osMBuf_realloc(destmb, MAX(rsize, dsize));
+        if (err)
+        {
+            return err;
+        }
+    }
+
+    memcpy(destmb->buf + destmb->pos, &srcmb->buf[startPos], size);
+
+    if(isAdvancePos)
+    {
+        destmb->pos += size;
+        destmb->end  = MAX(destmb->end, destmb->pos);
+    }
+    else
+    {
+        destmb->end  = MAX(destmb->end, destmb->pos + size);
+    }
+
+    return 0;
+}
+
+
+/**
+ * Write an 8-bit value to a memory buffer in the current mbuf position
+ *
+ * @param mb Memory buffer
+ * @param v  8-bit value to write
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_writeU8(osMBuf_t *mb, uint8_t v, bool isAdvancePos)
+{
+	return osMBuf_writeBuf(mb, (uint8_t *)&v, sizeof(v), isAdvancePos);
+}
+
+
+int osMBuf_writeU8Str(osMBuf_t *mb, uint8_t v, bool isAdvancePos)
+{
+	char str[OS_MAX_UINT64_STR_LEN];
+	int len = osUInt2Str8(v, str);
+    return osMBuf_writeBuf(mb, (uint8_t *)str, len, isAdvancePos);
+}
+
+
+/**
+ * Write a 16-bit value to a memory buffer in the current mbuf position
+ *
+ * @param mb Memory buffer
+ * @param v  16-bit value to write
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_writeU16(osMBuf_t *mb, uint16_t v, bool isAdvancePos)
+{
+	return osMBuf_writeBuf(mb, (uint8_t *)&v, sizeof(v), isAdvancePos);
+}
+
+
+int osMBuf_writeU16Str(osMBuf_t *mb, uint16_t v, bool isAdvancePos)
+{
+    char str[OS_MAX_UINT64_STR_LEN];
+    int len = osUInt2Str16(v, str);
+    return osMBuf_writeBuf(mb, (uint8_t *)str, len, isAdvancePos);
+}
+
+
+/**
+ * Write a 32-bit value to a memory buffer in the current mbuf position
+ *
+ * @param mb Memory buffer
+ * @param v  32-bit value to write
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_writeU32(osMBuf_t *mb, uint32_t v, bool isAdvancePos)
+{
+	return osMBuf_writeBuf(mb, (uint8_t *)&v, sizeof(v), isAdvancePos);
+}
+
+
+int osMBuf_writeU32Str(osMBuf_t *mb, uint32_t v, bool isAdvancePos)
+{
+    char str[OS_MAX_UINT64_STR_LEN];
+    int len = osUInt2Str32(v, str);
+    return osMBuf_writeBuf(mb, (uint8_t *)str, len, isAdvancePos);
+}
+
+
+/**
+ * Write a 64-bit value to a memory buffer in the current mbuf position
+ *
+ * @param mb Memory buffer
+ * @param v  64-bit value to write
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_writeU64(osMBuf_t *mb, uint64_t v, bool isAdvancePos)
+{
+	return osMBuf_writeBuf(mb, (uint8_t *)&v, sizeof(v), isAdvancePos);
+}
+
+
+int osMBuf_writeU64Str(osMBuf_t *mb, uint64_t v, bool isAdvancePos)
+{
+    char str[OS_MAX_UINT64_STR_LEN];
+    int len = osUInt2Str64(v, str);
+    return osMBuf_writeBuf(mb, (uint8_t *)str, len, isAdvancePos);
+}
+
+
+/**
+ * Write a null-terminated string to a memory buffer in the current mbuf position
+ *
+ * @param mb  Memory buffer
+ * @param str Null terminated string to write
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_writeStr(osMBuf_t *mb, const char *str, bool isAdvancePos)
+{
+	if (!str)
+	{
+		return EINVAL;
+	}
+
+	return osMBuf_writeBuf(mb, (const uint8_t *)str, strlen(str), isAdvancePos);
+}
+
+
+/**
+ * Write a pointer-length string to a memory buffer in the current mbuf position
+ *
+ * @param mb  Memory buffer
+ * @param pl  Pointer-length string
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_writePL(osMBuf_t *mb, const osPointerLen_t *pl, bool isAdvancePos)
+{
+	if (!pl)
+	{
+		return EINVAL;
+	}
+
+	return osMBuf_writeBuf(mb, (const uint8_t *)pl->p, pl->l, isAdvancePos);
+}
+
+
+/**
+ * Write a pointer-length string to a memory buffer, excluding a section
+ *
+ * @param mb   Memory buffer
+ * @param pl   Pointer-length string
+ * @param skip Part of pl to exclude
+ *
+ * @return 0 if success, otherwise errorcode
+ *
+ * @todo: create substf variante
+ */
+int osMBuf_writePLskipSection(osMBuf_t *mb, const osPointerLen_t *pl, const osPointerLen_t *skip, bool isAdvancePos)
+{
+    osPointerLen_t r;
+    int err;
+
+    if (!pl)
+    {
+        return EINVAL;
+    }
+
+    if(!skip)
+    {
+        return osMBuf_writePL(mb, pl, isAdvancePos);
+    }
+
+    if (pl->p > skip->p || (skip->p + skip->l) > (pl->p + pl->l))
+    {
+        return ERANGE;
+    }
+
+    r.p = pl->p;
+    r.l = skip->p - pl->p;
+
+    err = osMBuf_writeBuf(mb, (const uint8_t *)r.p, r.l, isAdvancePos);
+    if (err)
+    {
+        return err;
+    }
+
+    r.p = skip->p + skip->l;
+    r.l = pl->p + pl->l - r.p;
+
+    return osMBuf_writeBuf(mb, (const uint8_t *)r.p, r.l, isAdvancePos);
+}
+
+
+/**
+ * Read a block of memory from a memory buffer pointed by the current mbuf position
+ *
+ * @param mb   Memory buffer
+ * @param buf  Buffer to read data to
+ * @param size Size of buffer
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_readBuf(osMBuf_t *mb, uint8_t *buf, size_t size)
+{
+	if (!mb || !buf)
+	{
+		return EINVAL;
+	}
+
+	if (size > osMBuf_getRemaining(mb)) 
+	{
+		logWarning("tried to read beyond mbuf end (%u > %u)\n", size, osMBuf_getRemaining(mb));
+		return EOVERFLOW;
+	}
+
+	memcpy(buf, mb->buf + mb->pos, size);
+
+	mb->pos += size;
+
+	return 0;
+}
+
+
+/**
+ * Read an 8-bit value from a memory buffer pointed by the current mbuf position
+ *
+ * @param mb Memory buffer
+ *
+ * @return 8-bit value
+ */
+uint8_t osMBuf_readU8(osMBuf_t *mb)
+{
+	uint8_t v;
+
+	return (0 == osMBuf_readBuf(mb, &v, sizeof(v))) ? v : 0;
+}
+
+
+/**
+ * Read a 16-bit value from a memory buffer pointed by the current mbuf position
+ *
+ * @param mb Memory buffer
+ *
+ * @return 16-bit value
+ */
+uint16_t osMBuf_readU16(osMBuf_t *mb)
+{
+	uint16_t v;
+
+	return (0 == osMBuf_readBuf(mb, (uint8_t *)&v, sizeof(v))) ? v : 0;
+}
+
+
+/**
+ * Read a 32-bit value from a memory buffer pointed by the current mbuf position
+ *
+ * @param mb Memory buffer
+ *
+ * @return 32-bit value
+ */
+uint32_t osMBuf_readU32(osMBuf_t *mb)
+{
+	uint32_t v;
+
+	return (0 == osMBuf_readBuf(mb, (uint8_t *)&v, sizeof(v))) ? v : 0;
+}
+
+
+/**
+ * Read a 64-bit value from a memory buffer pointed by the current mbuf position
+ *
+ * @param mb Memory buffer
+ *
+ * @return 64-bit value
+ */
+uint64_t osMBuf_readU64(osMBuf_t *mb)
+{
+	uint64_t v;
+
+	return (0 == osMBuf_readBuf(mb, (uint8_t *)&v, sizeof(v))) ? v : 0;
+}
+
+
+/**
+ * Read a string from a memory buffer pointed by the current mbuf position, assuming the memory buffer is a NULL terminated string
+ *
+ * @param mb   Memory buffer
+ * @param str  Buffer to read string to
+ * @param size Size of buffer
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_readStr(osMBuf_t *mb, char *str, size_t size)
+{
+	if (!mb || !str)
+	{
+		return EINVAL;
+	}
+
+	while (size--)
+	{
+		const uint8_t c = osMBuf_readU8(mb);
+		*str++ = c;
+		if ('\0' == c)
+		{
+			break;
+		}
+	}
+
+	return 0;
+}
+
+
+/**
+ * Duplicate a null-terminated string from a memory buffer pointed by the current mbuf position
+ *
+ * @param mb   Memory buffer
+ * @param strp Pointer to destination string; allocated and set
+ * @param len  Length of string
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_strdup(osMBuf_t *mb, char **strp, size_t len)
+{
+	char *str;
+	int err;
+
+	if (!mb || !strp)
+	{
+		return EINVAL;
+	}
+
+	str = osMem_alloc(len + 1, NULL);
+	if (!str)
+	{
+		return ENOMEM;
+	}
+
+	err = osMBuf_readBuf(mb, (uint8_t *)str, len);
+	if (err)
+	{
+		goto out;
+	}
+
+	str[len] = '\0';
+
+ out:
+	if (err)
+	{
+		osMem_deref(str);
+	}
+	else
+	{
+		*strp = str;
+	}
+
+	return err;
+}
+
+
+/**
+ * Write n bytes of value 'c' to a memory buffer, the current position will also extend by length n
+ *
+ * @param mb   Memory buffer
+ * @param c    Value to write
+ * @param n    Number of bytes to write
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_fill(osMBuf_t *mb, uint8_t c, size_t n)
+{
+	size_t rsize;
+
+	if (!mb || !n)
+	{
+		return EINVAL;
+	}
+
+	rsize = mb->pos + n;
+
+	if (rsize > mb->size) 
+	{
+		const size_t dsize = mb->size ? (mb->size * 2) : DEFAULT_SIZE;
+
+		int err;
+		err = osMBuf_realloc(mb, MAX(rsize, dsize));
+		if (err)
+			return err;
+	}
+
+	memset(mb->buf + mb->pos, c, n);
+
+	mb->pos += n;
+	mb->end  = MAX(mb->end, mb->pos);
+
+	return 0;
+}
+
+
+
+/**
+ * Debug the memory buffer
+ *
+ * @param pf Print handler
+ * @param mb Memory buffer
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int osMBuf_debug(FILE* pf, const osMBuf_t *mb)
+{
+	if (!mb || !pf)
+	{
+		return 0;
+	}
+
+	osPrintf_t printInfo;
+	printInfo.pHandler = osPrintfHandler_debug;
+	printInfo.arg = pf;
+
+	int err = osPrintf_handler(&printInfo, "mBuf=%p, buf=%p, buf.nref=%d, pos=%zu, end=%zu, size=%zu", mb, mb->buf, osMem_getRefNum(mb->buf), mb->pos, mb->end, mb->size);
+	if (!err)
+	{
+		err = osPrintf_handler(&printInfo, "\n");
+	}
+
+	return err;
+}
+
+
+/**
+ * Set absolute position
+ *
+ * @param mb  Memory buffer
+ * @param pos Position
+ */
+void osMBuf_setPos(osMBuf_t *mb, size_t pos)
+{
+    mb->pos = pos;
+    MBUF_CHECK_POS(mb);
+}
+
+void osMBuf_advance(osMBuf_t *mb, ssize_t n)
+{
+	if(!mb)
+	{
+		return;
+	}
+
+	if ((mb->pos + n) < 0 || ((mb->pos + n) > mb->size))
+	{
+		return;
+	}
+
+	mb->pos += n;
+} 
