@@ -17,7 +17,10 @@ typedef enum osInterface {
 	OS_Iu,
 	OS_GTPn,
 	OS_GTPu,
-	OS_TIMER_ALL = 100,
+	OS_SIP_TRANSPORT_LBINFO,
+	OS_SIP_TRANSPORT_SERVER,
+	OS_TIMER_TICK,			//to notify timer tick expires
+	OS_TIMER_ALL = 100,		//for timer register
 } osInterface_e;
 
 
@@ -107,6 +110,7 @@ typedef struct osResourceTimerWorker {
 static int osFDArray[OS_MAX_FD_PER_PROCESS];
 static int osFDNum=0;
 
+#if 0
 int osSetFDType(int fd, osFdType_e fdType)
 {
     //TODO, use hash
@@ -116,5 +120,6 @@ osFdType_e osGetFDType(int fd)
 {
     //TODO, use hash
 }
+#endif
 
 #endif

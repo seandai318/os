@@ -14,6 +14,7 @@
 #include "osMBuf.h"
 #include "osPL.h"
 #include "osMisc.h"
+#include "osDebug.h"
 
 
 /** Pointer-length NULL initialiser */
@@ -65,6 +66,19 @@ void osPL_setMBuf(osPointerLen_t *pl, const struct osMBuf *mb)
 
 	pl->p = (char *)osMBuf_getCurBuf(mb);
 	pl->l = osMBuf_getRemaining(mb);
+}
+
+
+//simply set the p and l to a osPointerLen, no memory allocation is performed.
+void osPL_set(osPointerLen_t* pl, void* p, size_t l)
+{
+	if(!pl)
+	{
+		return;
+	}
+
+	pl->p = p;
+	pl->l = l;
 }
 
 
@@ -294,7 +308,7 @@ int osPL_modifyu32(osPointerLen_t* pl, uint32_t n)
 	char newStr[10]={' '};
 	for (int i=0; i<pl->l; i++)
 	{
-		newStr[i] = n % 10;
+		newStr[i] = n % 10 + '0';
 		n = n / 10;
 		if(n == 0)
 		{
@@ -353,6 +367,25 @@ int osPL_strcpy(const osPointerLen_t *pl, char *str, size_t size)
 }
 
 
+//copy a content of srcPL to dstPL, dstPL is expected to already have memory allocated for dstPL->p, the len of srcPL must be smaller than or equal to dstPL
+int osPL_plcpy(osPointerLen_t* dstPL, osPointerLen_t* srcPL)
+{
+	if(!dstPL || !srcPL)
+	{
+		return EINVAL;
+	}
+
+	if(srcPL->l > dstPL->l)
+	{
+		return EINVAL;
+	}
+
+	memcpy((void*)dstPL->p, srcPL->p, srcPL->l);
+
+	return 0;
+}
+
+
 /**
  * Duplicate a pointer-length object to a NULL-terminated string
  *
@@ -393,7 +426,7 @@ int osPL_strdup(char **dst, const osPointerLen_t *src)
  *
  * @return 0 if success, otherwise errorcode
  */
-int osPL_dup(osPointerLen_t *dst, const osPointerLen_t *src)
+int osDPL_dup(osDPointerLen_t *dst, const osPointerLen_t *src)
 {
 	char *p;
 
@@ -563,6 +596,7 @@ osPointerLen_t osPL_clone(const osPointerLen_t* pl)
 }
 
 
+#if 0
 osPointerLen_t osPL_cloneRef(const osPointerLen_t* pl)
 {
     osPointerLen_t clonePL;
@@ -574,7 +608,7 @@ osPointerLen_t osPL_cloneRef(const osPointerLen_t* pl)
 
     return clonePL;
 }
-
+#endif
 
 /**
  * Locate character in pointer-length string
@@ -685,18 +719,20 @@ void osPL_trimLWS(osPointerLen_t* pl, bool isTrimTop, bool isTrimBottom)
 		}
 	}
 }
-void osPL_dealloc(osPointerLen_t* pl)
-{
-	if(!pl)
-	{
-		return;
-	}
 
-	if(pl->p && pl->l)
-	{
-		osMem_deref((void*) pl->p);
-		pl->l=0;
-	}
+
+void osDPL_dealloc(osDPointerLen_t* pl)
+{
+    if(!pl)
+    {
+        return;
+    }
+
+    if(pl->p && pl->l)
+    {
+        osMem_deref((void*) pl->p);
+        pl->l=0;
+    }
 }
 
 

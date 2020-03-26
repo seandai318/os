@@ -29,6 +29,14 @@ typedef struct osList {
 	osListElement_t *tail;  /**< Last list element  */
 } osList_t;
 
+
+typedef struct {
+    size_t num;
+    void* first;
+    osList_t more;
+} osListPlus_t;
+
+
 /** Linked list Initializer */
 #define LIST_INIT {NULL, NULL}
 
@@ -77,6 +85,11 @@ osListElement_t* osList_getHead(const osList_t *list);
 osListElement_t* osList_getTail(const osList_t *list);
 uint32_t osList_getCount(const osList_t *list);
 osStatus_e osList_addString(osList_t *pList, char* nameParam, size_t nameLen);
+
+osStatus_e osListPlus_append(osListPlus_t* pList, void* pData);
+void osListPlus_clear(osListPlus_t* pList);
+
+
 
 /**
  * Get the user-data from a list element

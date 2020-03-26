@@ -22,13 +22,17 @@ static struct osDbg {
 	FILE *f;               /**< Logfile                */
 	pthread_mutex_t mutex; /**< Thread locking         */
 } osDbgInfo = {
-	DBG_INFO,
+	DBG_DEBUG,
 	DBG_ANSI,
 	NULL,
 	NULL,
 	NULL,
 	PTHREAD_MUTEX_INITIALIZER,
 };
+
+
+static osDbgLevel_e osDbgMLevel[LM_ALL];
+
 
 
 static inline void osDbg_lock(void)
@@ -49,12 +53,30 @@ static inline void osDbg_unlock(void)
  * @param level Debug level
  * @param flags Debug flags
  */
-void osDbg_init(int level, enum osDbg_flags flags)
+void osDbg_init(osDbgLevel_e level, enum osDbg_flags flags)
 {
 	osDbg_lock();
+	for(int i=0; i<LM_ALL; i++)
+	{
+		osDbgMLevel[i] = DBG_EMERG;
+	}
+	osDbgMLevel[LM_ALL] = level;
 	osDbgInfo.level = level;
 	osDbgInfo.flags = flags;
 	osDbg_unlock();
+}
+
+
+void osDbg_mInit(osLogModule_e module, osDbgLevel_e level)
+{
+	if(module > LM_ALL || level > DBG_DEBUG)
+	{
+		return;
+	}
+
+    osDbg_lock();
+	osDbgMLevel[module] = level;
+    osDbg_unlock();
 }
 
 
@@ -104,9 +126,14 @@ int osDbg_setLogfile(const char *name)
 }
 
 
-bool osDbg_isBypass(int level)
+bool osDbg_isBypass(osDbgLevel_e level, osLogModule_e module)
 {
-	if(level > osDbgInfo.level)
+	if(level > DBG_DEBUG || module > LM_ALL)
+	{
+		return true;
+	}
+
+	if(level > osDbgMLevel[module]) 
 	{
         return true;
 	}
@@ -219,7 +246,7 @@ static void osDbg_onFile(int level, const char *fmt, va_list ap)
  */
 void osDbg_printf(int level, const char *fmt, ...)
 {
-	//only print the logs that has more severe level than been set 
+	//only print the logs that has more severe level than been set
 	if(level > osDbgInfo.level)
 	{
 		return;
@@ -279,5 +306,7 @@ void osDbg_printStr(const char* str, size_t strlen)
 		pStr[strlen] = '\0';
 
 		printf("%s\n", pStr);
+		
+		free(pStr);
 	}
 }

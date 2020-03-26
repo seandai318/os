@@ -191,6 +191,7 @@ int osPrintf_onHandler(const char *fmt, va_list ap, osPrintf_h pHandler, void *a
 	osPrintf_t pf;
 	bool fm = false, plr = false;
 	const osPointerLen_t *pl;
+	const osMBuf_t* pMbuf;
 	size_t pad = 0, fpad = -1, len, i;
 	const char *str, *p = fmt, *p0 = fmt;
 	const osSocketAddr_t *sa;
@@ -365,6 +366,11 @@ int osPrintf_onHandler(const char *fmt, va_list ap, osPrintf_h pHandler, void *a
 				err |= write_padded(pl ? pl->p : NULL, (pl && pl->p) ? pl->l : 0, pad, ' ', plr, NULL, pHandler, arg);
 				break;
 
+			case 'M':
+				pMbuf = va_arg(ap, const osMBuf_t *);
+
+                err |= write_padded(pMbuf ? pMbuf->buf : NULL, (pMbuf && pMbuf->buf) ? pMbuf->end : 0, pad, ' ', plr, NULL, pHandler, arg);
+				break;
 			case 's':
 				str = va_arg(ap, const char *);
 				err |= write_padded(str, osStrLen(str), pad, ' ', plr, NULL, pHandler, arg);

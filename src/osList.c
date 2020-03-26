@@ -10,7 +10,6 @@
 #include "osDebug.h"
 
 
-
 /**
  * Initialise a linked list
  *
@@ -42,6 +41,7 @@ void osList_delete(osList_t* pList)
 		return;
 	}
 
+logError("to-remove, delete, addr=%p, total element=%d", pList, osList_getCount(pList));
 	pLE = pList->head;
 	while (pLE) {
 		osListElement_t *pNext = pLE->next;
@@ -49,10 +49,15 @@ void osList_delete(osList_t* pList)
 		pLE->list = NULL;
 		pLE->prev = pLE->next = NULL;
 		pLE->data = NULL;
-		free(pLE);
+
+    logError("to-remove, delete, addr=%p.", pLE);
+
+		osfree(pLE);
 
 		pLE = pNext;
-		osMem_deref(data);
+        osMem_deref(data);
+
+//		osfree(data);
 	}
 
 	osList_init(pList);
@@ -78,7 +83,9 @@ void osList_clear(osList_t* pList)
 		pLE->prev = pLE->next = NULL;
 		pLE->data = NULL;
 
-		free(pLE);
+    logError("to-remove, clear, addr=0x%x.", pLE);
+
+		osfree(pLE);
 		pLE = pNext;
 	}
 
@@ -100,7 +107,7 @@ osListElement_t* osList_append(osList_t *list, void *data)
 		return NULL;
 	}
 
-	osListElement_t* pLE = malloc(sizeof(osListElement_t));
+	osListElement_t* pLE = osmalloc_r(sizeof(osListElement_t), NULL);
 	if(pLE == NULL)
 	{
 		logError("fail to allocate osListElement_t");
@@ -122,6 +129,7 @@ osListElement_t* osList_append(osList_t *list, void *data)
 
 	list->tail = pLE;
 
+	logError("to-remove, append, size=%d, addr=%p.", sizeof(osListElement_t), pLE);
 	return pLE;
 }
 
@@ -171,7 +179,7 @@ osListElement_t* osList_prepend(osList_t *list, void *data)
 		return NULL;
 	}
 
-    osListElement_t* pLE = (osListElement_t*) malloc(sizeof(osListElement_t));
+    osListElement_t* pLE = (osListElement_t*) osmalloc_r(sizeof(osListElement_t), NULL);
     if(pLE == NULL)
     {
         logWarning("fail to allocate osListElement_t");
@@ -337,7 +345,7 @@ void* osList_deleteElement(osList_t* pList, osListApply_h applyHandler, void *ar
 
 	void* pData = pLE->data;
 	osList_unlinkElement(pLE);
-	free(pLE);
+	osfree(pLE);
 
 	return pData;
 }
@@ -441,8 +449,6 @@ void osList_sort(osList_t *list, osListSortHandler sortHandler, void *arg)
  */
 osListElement_t *osList_lookup(const osList_t *list, bool fwd, osListApply_h applyHandler, void *arg)
 {
-	DEBUG_BEGIN
-
 	osListElement_t *le;
 
 	if (!list || !applyHandler)
@@ -465,7 +471,6 @@ osListElement_t *osList_lookup(const osList_t *list, bool fwd, osListApply_h app
 		}
 	}
 
-	DEBUG_END
 	return NULL;
 }
 
@@ -523,7 +528,7 @@ osStatus_e osList_addString(osList_t *pList, char* nameParam, size_t nameLen)
 //  DEBUG_BEGIN
     osStatus_e status = OS_STATUS_OK;
 
-    osPointerLen_t* pPL = osMem_alloc(sizeof(osPointerLen_t), NULL);
+    osPointerLen_t* pPL = osmalloc_r(sizeof(osPointerLen_t), NULL);
     if(pPL == NULL)
     {
         logError("could not allocate memory for pPL.");
@@ -546,7 +551,7 @@ osStatus_e osList_addString(osList_t *pList, char* nameParam, size_t nameLen)
     if(pLE == NULL)
     {
         logError("osList_append failure.");
-        osMem_deref(pPL);
+        osfree(pPL);
         status = OS_ERROR_MEMORY_ALLOC_FAILURE;
         goto EXIT;
     }
@@ -565,7 +570,7 @@ void osList_orderAppend(osList_t *list, osListSortHandler sortHandler, void* dat
 		return;
 	}
 
-	osListElement_t* pLE2 = malloc(sizeof(osListElement_t));
+	osListElement_t* pLE2 = osmalloc_r(sizeof(osListElement_t), NULL);
 	if(!pLE2)
 	{
 		logError("osMem_alloc fails.");
@@ -581,8 +586,15 @@ void osList_orderAppend(osList_t *list, osListSortHandler sortHandler, void* dat
 		if(sortHandler(pLE, pLE2, sortArg))
 		{
 			pLE2->prev = pLE->prev;
-			pLE->next = pLE;
-			pLE->prev->next = pLE2;
+			pLE2->next = pLE;
+			if(pLE->prev == NULL)
+			{
+				list->head = pLE2;
+			}
+			else
+			{
+				pLE->prev->next = pLE2;
+			}
 			pLE->prev = pLE2;
 
 			return;
@@ -606,3 +618,51 @@ void osList_orderAppend(osList_t *list, osListSortHandler sortHandler, void* dat
 		list->tail = pLE2;
 	}	
 }
+
+
+osStatus_e osListPlus_append(osListPlus_t* pList, void* pData)
+{
+	osStatus_e status = OS_STATUS_OK;
+	if(!pList || !pData)
+	{
+		logError("null pointer, pList=%p, pData=%p.", pList, pData);
+		status = OS_ERROR_NULL_POINTER;
+		goto EXIT;
+	}
+
+logError("to-remove, TCM, num=%d, pData=%p", pList->num, pData);
+	if(pList->num == 0)
+	{
+		pList->first = pData;
+	}
+	else 
+	{
+		if(!osList_append(&pList->more, pData))
+		{
+			status = OS_ERROR_SYSTEM_FAILURE;
+			goto EXIT;
+		}
+	}
+
+	++pList->num;
+
+EXIT:
+	return status;
+}
+
+
+void osListPlus_clear(osListPlus_t* pList)
+{
+	if(!pList)
+	{
+		return;
+	}
+
+	pList->first = NULL;
+	if(pList->num > 1)
+	{
+		osList_clear(&pList->more);
+	}
+
+	pList->num = 0;
+}	

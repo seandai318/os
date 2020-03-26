@@ -80,7 +80,7 @@ osMBuf_t *osMBuf_allocRef(osMBuf_t *mbr)
 	return mb;
 }
 
-//use the original buffer's pos
+//use the original buffer's pos.  Be noted osMem_ref is not called, pDupMBuf shall be used as a temporary helping variable, shall be live longer than pOrigMBuf
 void osMBuf_allocRef1(osMBuf_t* pDupMBuf, osMBuf_t* pOrigMBuf, size_t newPos, size_t len)
 {
 	if(!pDupMBuf || !pOrigMBuf)
@@ -96,8 +96,9 @@ void osMBuf_allocRef1(osMBuf_t* pDupMBuf, osMBuf_t* pOrigMBuf, size_t newPos, si
 }
 
 
-//reposition the pos to 0
-void osMBuf_allocRef2(osMBuf_t* pDupMBuf, osMBuf_t* pOrigMBuf, size_t newPos, size_t len)
+//reposition the pos to 0.  Be noted osMem_ref is not called, pDupMBuf shall be used as a temporary helping variable, shall NOT be live longer than pOrigMBuf
+//startPos is the pOrigMBuf->pos where the pDupMBuf shall start from
+void osMBuf_allocRef2(osMBuf_t* pDupMBuf, osMBuf_t* pOrigMBuf, size_t startPos, size_t len)
 {
     if(!pDupMBuf || !pOrigMBuf)
     {
@@ -105,7 +106,7 @@ void osMBuf_allocRef2(osMBuf_t* pDupMBuf, osMBuf_t* pOrigMBuf, size_t newPos, si
     }
 
 
-    pDupMBuf->buf = &pOrigMBuf->buf[pDupMBuf->pos];
+    pDupMBuf->buf = &pOrigMBuf->buf[startPos];
 	pDupMBuf->pos = 0;
 	pDupMBuf->end = len;
 	pDupMBuf->size = len;
@@ -244,6 +245,23 @@ int osMBuf_shift(osMBuf_t *mb, ssize_t shift)
 	return 0;
 }
 
+
+int osMBuf_modifyStr(osMBuf_t *mb, char* str, size_t strLen, size_t pos)
+{
+	if(!mb || !str)
+	{
+		return -1;
+	}
+
+logError("to-remove, mb->end=%ld, mb->pos=%ld", mb->end,  mb->pos);
+	if(pos+strLen >= mb->end)
+	{
+		return -1;
+	}
+
+	memcpy(mb->buf + pos, str, strLen);
+}
+	
 
 /**
  * Write a block of memory to a memory buffer starting from the current mbuf position
@@ -458,6 +476,20 @@ int osMBuf_writePL(osMBuf_t *mb, const osPointerLen_t *pl, bool isAdvancePos)
 	return osMBuf_writeBuf(mb, (const uint8_t *)pl->p, pl->l, isAdvancePos);
 }
 
+
+//write until a pattern is meet, the writing ends after the last character of the pattern
+int osMBuf_writeUntil(osMBuf_t *mb, const osPointerLen_t* src, const osPointerLen_t* pattern, bool isAdvancePos)
+{
+	const char* p = osPL_findStr(src, pattern->p, pattern->l);
+	if(!p)
+	{
+		return EINVAL;
+	}
+			
+	osPointerLen_t writePL = {src->p, p - src->p + pattern->l};
+	return osMBuf_writePL(mb, &writePL, true);
+}
+ 
 
 /**
  * Write a pointer-length string to a memory buffer, excluding a section
@@ -767,4 +799,137 @@ void osMBuf_advance(osMBuf_t *mb, ssize_t n)
 	}
 
 	mb->pos += n;
-} 
+}
+
+
+//return value, -1, no match found, otherwise, the beginning of the pattern in the string
+ssize_t osMbuf_findMatch(osMBuf_t* pBuf, osPointerLen_t* pattern)
+{
+	if(!pBuf || !pattern || pattern->l == 0 || !pattern->p )
+	{
+		logError("null pointer, pBuf=%p, pattern=%p, pattern(%p:%ld).", pBuf, pattern, pattern->p, pattern->l);
+		return -1;
+	}
+
+	ssize_t pos = -1;
+	size_t end = pBuf->end - pattern->l;
+	while(pBuf->pos < end)
+	{
+		//check char for pos-0 and pos-1, if match, compare the whole pattern
+		if(pBuf->buf[pBuf->pos] == pattern->p[0])
+		{
+			pos = pBuf->pos++;
+			if(pattern->l == 1)
+			{
+				goto EXIT;
+			}
+			else if(pattern->l == 2)
+			{
+				if(pBuf->buf[pBuf->pos++] == pattern->p[1])
+				{
+					goto EXIT;
+				}
+			}
+			else
+			{
+				if(pBuf->buf[pBuf->pos++] == pattern->p[1])
+				{
+					if(strncasecmp(&pBuf->buf[pBuf->pos], &pattern->p[2], pattern->l-2) == 0)
+					{
+						goto EXIT;
+					}
+				}
+			}
+            pBuf->pos = pos + 1;
+		}
+		else
+		{
+			pBuf->pos++;
+		}
+	}
+
+	pos = -1;
+
+EXIT:
+	if(pos != -1)
+	{
+		pBuf->pos = pos;
+	}
+	return pos;
+}
+
+
+ssize_t osMbuf_findValue(osMBuf_t* pBuf, char tag1, char tag2, bool isExclSpace, osPointerLen_t* pValue)
+{
+	if(!pBuf || !pValue)
+	{
+		return -1;
+	}
+
+	ssize_t pos = -1;
+	ssize_t len = -1;
+	while(pBuf->pos < pBuf->end)
+	{
+		if(pBuf->buf[pBuf->pos] == tag1)
+		{
+			pos = ++pBuf->pos;
+			while(pBuf->pos < pBuf->end)
+			{
+				if(pBuf->buf[pBuf->pos++] == tag2)
+				{
+					len = pBuf->pos - pos - 1;
+					break;
+				}
+			}
+
+			if(len != -1)
+			{
+				break;
+			}
+		}
+		else
+		{
+			pBuf->pos++;
+		}
+	}
+
+	if(pos == -1 || len == -1)
+	{
+		return -1;
+	}
+
+osPointerLen_t temp={&pBuf->buf[pos], len};
+	if(isExclSpace)
+	{
+		size_t end = pos+len;
+		for(; pos < end; pos++)
+		{
+			if(pBuf->buf[pos] != ' ' && pBuf->buf[pos] != '\t')
+			{
+				pValue->p = &pBuf->buf[pos];
+				break;
+			}
+		}
+		len = end - pos;
+
+		for(int i=end-1; i>=pos; i--)
+		{
+			if(pBuf->buf[i] != ' ' && pBuf->buf[i] != '\t')
+			{
+				pValue->l = len;
+				break;
+			}
+			else
+			{
+				--len;
+			}
+		}
+	}
+	else
+	{
+		pValue->p = &pBuf->buf[pos];
+		pValue->l = len;
+	}
+
+	return pos;
+}

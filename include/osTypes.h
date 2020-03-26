@@ -66,6 +66,8 @@ typedef enum {
 	OS_ERROR_INVALID_VALUE,		
 	OS_ERROR_EXT_INVALID_VALUE,		//the error is due to the external input, for xample, error in incoming message
 	OS_ERROR_MEMORY_ALLOC_FAILURE,
+	OS_ERROR_SYSTEM_FAILURE,
+	OS_ERROR_NETWORK_FAILURE,
 } osStatus_e;
 
 

@@ -1,12 +1,12 @@
-//Copyright (c) 2019, InterLogic
+//Copyright (c) 2019, Sean Dai
 
 #ifndef _OS_TIMER_H
 #define _OS_TIMER_H
 
 #include "osTypes.h"
+#include "osResourceMgmt.h"
 
-
-//the subchain is 10 min long
+//the subchain is 100 sec long
 #define OS_TIMEOUT_SUB_CHAIN_TIME	100
 //the timeout granuity is 50 ms
 #define OS_TIMEOUT_SUB_CHAIN_INTERVAL	50 
@@ -26,6 +26,7 @@
 typedef void (*timeoutCallBackFunc_t)(uint64_t timerId, void* ptr);
 
 typedef struct osTimerInfo {
+	uint32_t nextTimeout;		//msec, fot tick, if one time timeout, this value shall be set to 0
 	timeoutCallBackFunc_t callback;
 	void* pData;
 } osTimerInfo_t;
@@ -40,7 +41,7 @@ typedef struct osTimerEvent {
 
 
 typedef struct osTimerSubChainNode {
-	time_t nodeTimeMSec;
+	time_t nodeTimeMSec;		//each subChain node represents a time period (OS_TIMEOUT_SUB_CHAIN_INTERVAL), nodeTimeMSec=the beginning of the time period
 	uint32_t nodeId;
 	uint32_t eventCount;
 	osTimertEvent_t* pTimerEvent;
@@ -50,7 +51,7 @@ typedef struct osTimerSubChainNode {
 
 
 typedef struct osTimerChainNode {
-	time_t nodeTimeSec;
+	time_t nodeTimeSec;			//each chain node represents a time period (OS_TIMEOUT_SUB_CHAIN_TIME), nodeTimeSec=the beginning of the time period 
 	uint32_t nodeId;
 	osTimerSubChainNode_t* pTimerSubChain;
 	struct osTimerChainNode* pNext;
@@ -59,8 +60,12 @@ typedef struct osTimerChainNode {
 
 
 int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeoutCallBackFunc_t callBackFunc);
-int osTimerGetMsg(void* pMsg);
+int osTimerModuleInit(int* timerWriteFd);
+int osTimerGetMsg(osInterface_e intf, void* pMsg);
 uint64_t osStartTimer(time_t msec, timeoutCallBackFunc_t callback, void* pData);
+uint64_t osStartTick(time_t msec, timeoutCallBackFunc_t callback, void* pData);
 int osStopTimer(uint64_t timerId);
+//if LM_TIMER DEBUG level is not turned on, this function does nothing
+void osTimerListSubChainNodes(osTimerChainNode_t* pNode);
 
 #endif

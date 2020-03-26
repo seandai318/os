@@ -7,6 +7,7 @@
 #define OS_IS_LWS(a) (!(a^0x20) || !(a^0x9) || !(a^0xa) || !(a^0xd))
 
 #define OS_MAX_UINT64_STR_LEN	21 //the actual len is 20, plus 1 for null termination
+
 typedef enum {
 	OS_INT_TYPE_U8,
 	OS_INT_TYPE_U16,

@@ -7,10 +7,21 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <err.h>
+
 #include "osTimer.h"
 #include "osTimerModule.h"
 #include "osResourceMgmt.h"
 #include "osDebug.h"
+#include "osMemory.h"
+#include "osList.h"
+
+
+
+typedef struct tickInfo {
+	time_t msec;
+	timeoutCallBackFunc_t callback;
+	void* pData;
+} tickInfo_t;
 
 
 static int osTimerTickExpire();	//this is a internal function called when periodically tick time for the module expires
@@ -18,25 +29,32 @@ static uint64_t osChainInsertTimerEvent(osTimerChainNode_t* pChainNode, time_t d
 static int osChainStopTimerFreeTimerEvent(osTimerChainNode_t* pCurNode, uint64_t timerId);
 static osTimerChainNode_t* osChainFreeSubChainTimerEvents(osTimerChainNode_t* pCurNode, time_t diffMsec);
 static osTimerSubChainNode_t* osTimerFindSubChainNode(osTimerChainNode_t* pChainNode, int isForceInsert, time_t mSec);
-static osTimerChainNode_t* osTimerFindChainNode(osTimerChainNode_t* pChainNode, int isForceInsert, time_t diffSec);
+static osTimerSubChainNode_t* osTimerFindSubChainNodeById(osTimerChainNode_t* pChainNode, uint32_t subNodeId, osTimerSubChainNode_t** ppPrevSubNode);
+static osTimerChainNode_t* osTimerFindChainNode(osTimerChainNode_t* pChainNode, int isForceInsert, time_t sec, bool isDiffSec);
+static osTimerChainNode_t* osTimerFindChainNodeById(osTimerChainNode_t* pCurNode, uint32_t nodeId);
 static osTimertEvent_t* osTimerEventCreate(osTimerChainNode_t* pChainNode, osTimerSubChainNode_t* pSubChainNode, void* pData);
-static uint64_t osChainInsertTimerEvent(osTimerChainNode_t* pChainNode, time_t diffMsec, void* pData);
+//static uint64_t osChainInsertTimerEvent(osTimerChainNode_t* pChainNode, time_t diffMsec, void* pData);
+static uint64_t osStartTimerInternal(time_t msec, timeoutCallBackFunc_t callback, void* pData, osTimerInfo_t* pTimerInfo, bool isTick);
+static void osTimerExpireInternal(timeoutCallBackFunc_t callback, uint64_t timerId, osTimerInfo_t* pTimerInfo);
 
 static __thread osTimerChainNode_t* pTimerChain;
 static __thread int writeFd;
 static __thread int timerSubChainInterval;
 static __thread int isTimerReady=0;
 static __thread timeoutCallBackFunc_t onTimeout;
+static __thread osList_t tickList = {};
 static __thread int debugCount=0; 
+//static __thread int itick = 0;
 
-//debug test
-//int testa;
 // this function shall be called once by application in the same thread once 
 int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeoutCallBackFunc_t callBackFunc)
 {
+	//to-remove
+	osmem_stat();
+
 	writeFd = localWriteFd;
 	onTimeout = callBackFunc;
-	pTimerChain = (osTimerChainNode_t*) malloc(sizeof(osTimerChainNode_t));
+	pTimerChain = (osTimerChainNode_t*) osmalloc(sizeof(osTimerChainNode_t), NULL);
 	
 	pTimerChain->nodeTimeSec = 0;
 	pTimerChain->nodeId = 1;
@@ -45,13 +63,14 @@ int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeou
 
 	osIPCMsg_t ipcMsg;
 	ipcMsg.interface = OS_TIMER_ALL;	
-	osTimerModuleMsg_t* pMsg = (osTimerModuleMsg_t*) malloc(sizeof(osTimerModuleMsg_t));
+	osTimerModuleMsg_t* pMsg = (osTimerModuleMsg_t*) osmalloc(sizeof(osTimerModuleMsg_t), NULL);
 	pMsg->msgType = OS_TIMER_MODULE_REG;
 	pMsg->clientPipeId = remoteWriteFd;
 	pMsg->timeoutMultiple = timeoutMultiple;
 	ipcMsg.pMsg = (void*) pMsg;
 
-	debug("debug, osTimerInit, pMsg=%p\n", pMsg);
+	mdebug(LM_TIMER, "received pMsg=%p\n", pMsg);
+
 	//pipePtrMsg.ptr = pIPCMsg;
 	
 //	testa=15;
@@ -72,41 +91,70 @@ int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeou
 }
 
 
-int osTimerGetMsg(void* pMsg)
+int osTimerGetMsg(osInterface_e intf, void* pMsg)
 {
 	int status = 0;
 
-	osTimerModuleMsgType_e msgType = ((osTimerModuleMsg_t*) pMsg)->msgType;
-	//debug("msgReceived, msgType=%d\n", msgType);
-	if (msgType == OS_TIMER_MODULE_REG_RESPONSE)
+	switch(intf)
 	{
-		timerSubChainInterval = ((osTimerModuleMsg_t*)pMsg)->timeoutMultiple * OS_TIMER_MIN_TIMEOUT_MS;
-		isTimerReady = 1;
+		case OS_TIMER_ALL:
+		{
+			osTimerModuleMsgType_e msgType = ((osTimerModuleMsg_t*) pMsg)->msgType;
+			//mdebug(LM_TIMER, "msgReceived, msgType=%d\n", msgType);
+			if (msgType == OS_TIMER_MODULE_REG_RESPONSE)
+			{
+				timerSubChainInterval = ((osTimerModuleMsg_t*)pMsg)->timeoutMultiple * OS_TIMER_MIN_TIMEOUT_MS;
+				isTimerReady = 1;
+
+				logError("to-remove, isTimerReady=%d, tickList=%p, tickList.head=%p", isTimerReady, &tickList, tickList.head);
+				osListElement_t* le = tickList.head;
+				while(le)
+				{
+					logError("to-remove, in le");
+					tickInfo_t* pTickInfo = le->data;
+					osStartTimerInternal(pTickInfo->msec, pTickInfo->callback, pTickInfo->pData, NULL, true);
+					le = le->next;
+				}
+				osList_delete(&tickList);
+			}
+			else
+			{
+				status = -1;
+			}
+
+		    osfree(pMsg);
+			break;
+		}
+		case OS_TIMER_TICK:
+//		mdebug(LM_TIMER, "debugCount=%d", ++debugCount);
+//			printf("osTimer, itick=%d\n", itick++);
+			osTimerTickExpire();
+			break;
+		default:
+			status = -1;
+			break;
 	}
-	else if (msgType = OS_TIMER_MODULE_EXPIRE)
-	{
-		debug("debugCount=%d", ++debugCount);
-		osTimerTickExpire();
-		if(debugCount==1) osStartTimer(1500, NULL, NULL);
-		if(debugCount==2) osStartTimer(1000, NULL, NULL);
-		if(debugCount==3) osStartTimer(100000, NULL, NULL);
-	}
-	else
-	{
-		status = -1;
-	}
-	
-	free(pMsg);
 
 	return status;
 }
 
 
+uint64_t osStartTick(time_t msec, timeoutCallBackFunc_t callback, void* pData)
+{
+	return osStartTimerInternal(msec, callback, pData, NULL, true);
+}
+
+
 uint64_t osStartTimer(time_t msec, timeoutCallBackFunc_t callback, void* pData)
 {
-	debug("onStartTimer, timeout=%ld, isTimerReady=%d", msec, isTimerReady);
+	return osStartTimerInternal(msec, callback, pData, NULL, false);
+}
+
+
+#if 0
 	if (!isTimerReady)
 	{
+		mlogInfo(LM_TIMER, "start a timer, timeout=%ld, the timer module is not ready!", msec);
 		return 0;
 	}
 	
@@ -119,16 +167,17 @@ uint64_t osStartTimer(time_t msec, timeoutCallBackFunc_t callback, void* pData)
 	}
 
 	time_t diffSec = tp.tv_sec + msec/1000 - pTimerChain->nodeTimeSec;
-	debug("pTimerChain=%p, pTimerChain->nodeTimeSec=%ld, curTimeSec=%ld, diffSec=%ld", pTimerChain, pTimerChain->nodeTimeSec, tp.tv_sec, diffSec);
+	mdebug(LM_TIMER, "pTimerChain=%p, nodeTimeSec=%ld, curTimeSec=%ld, diffSec=%ld", pTimerChain, pTimerChain->nodeTimeSec, tp.tv_sec, diffSec);
 	osTimerChainNode_t* pNewNode;
 	if (diffSec >= OS_TIMEOUT_SUB_CHAIN_TIME)
 	{
-		pNewNode = osTimerFindChainNode(pTimerChain, 1, diffSec);
+		pNewNode = osTimerFindChainNode(pTimerChain, true, diffSec, true);
 		if(pNewNode == NULL)
 		{
-			warn("timer could not find a a chain node, diffTime=%ld", diffSec);
+			mlogError(LM_TIMER, "timer could not find a a chain node, diffTime=%ld", diffSec);
 			return 0;
 		}
+		mlogInfo(LM_TIMER, "new node=%p, nodeTimeSec=%ld.", pNewNode, pNewNode->nodeTimeSec); 
 	}
 	else
 	{
@@ -136,12 +185,19 @@ uint64_t osStartTimer(time_t msec, timeoutCallBackFunc_t callback, void* pData)
 	}
 		
 	time_t diffMsec = (tp.tv_sec - pNewNode->nodeTimeSec)*1000 + msec + tp.tv_nsec/1000000;
-	osTimerInfo_t* pTimerInfo = malloc(sizeof(osTimerInfo_t));
+	osTimerInfo_t* pTimerInfo = osmalloc(sizeof(osTimerInfo_t), NULL);
 	pTimerInfo->pData = pData;
 	pTimerInfo->callback = callback;
-	debug("diffMSec=%ld", diffMsec);
-	return osChainInsertTimerEvent(pNewNode, diffMsec, pTimerInfo);
+	pTimerInfo->nextTimeout = 0;
+
+	uint64_t timerId = osChainInsertTimerEvent(pNewNode, diffMsec, pTimerInfo);
+	mdebug(LM_TIMER, "diffMSec=%ld, pTimerChain=%p, new timerNode=%p", diffMsec, pTimerChain, pNewNode);
+	mlogInfo(LM_TIMER, "start a timer, timeout=%ld, timerId=0x%lx, pTimerInfo=%p", msec, timerId, pTimerInfo);
+	osTimerListSubChainNodes(NULL);
+
+	return timerId;
 }
+#endif
 
 
 int osStopTimer(uint64_t timerId)
@@ -151,30 +207,157 @@ int osStopTimer(uint64_t timerId)
 		return -1;
 	}
 	
-	return osChainStopTimerFreeTimerEvent(pTimerChain, timerId);
+	int ret = osChainStopTimerFreeTimerEvent(pTimerChain, timerId);
+	mlogInfo(LM_TIMER, "stop timerId=0x%lx, %s", timerId, ret == 0 ? "successful" : "failed");
+    osTimerListSubChainNodes(NULL);
 }
 
 
+
+
+static uint64_t osStartTimerInternal(time_t msec, timeoutCallBackFunc_t callback, void* pData, osTimerInfo_t* pTimerInfo, bool isTick)
+{
+    if (!isTimerReady)
+    {
+		logError("to-remove, isTimerReady=%d", isTimerReady);
+		if(isTick)
+		{
+			tickInfo_t* pTickInfo = osMem_alloc(sizeof(tickInfo_t), NULL);
+			if(!pTickInfo)
+			{
+				logError("fails to allocate memory for pTickInfo, size(%ld).", sizeof(tickInfo_t));
+				return 0;
+			}
+
+			pTickInfo->msec = msec;
+			pTickInfo->callback = callback;
+			pTickInfo->pData = pData;
+			osList_append(&tickList, pTickInfo);
+			logError("to-remove, isTimerReady=%d, tickList=%p, head=%p", isTimerReady, &tickList, tickList.head);
+		}
+        else
+		{	
+			mlogInfo(LM_TIMER, "start a timer, timeout=%ld, the timer module is not ready!", msec);
+        }
+		return 0;
+    }
+
+    struct timespec tp;
+    clock_gettime(CLOCK_REALTIME, &tp);
+
+    if(pTimerChain->nodeTimeSec ==0)
+    {
+        pTimerChain->nodeTimeSec = tp.tv_sec;
+    }
+
+    time_t diffSec = tp.tv_sec + msec/1000 - pTimerChain->nodeTimeSec;
+    mdebug(LM_TIMER, "pTimerChain=%p, nodeTimeSec=%ld, curTimeSec=%ld, diffSec=%ld", pTimerChain, pTimerChain->nodeTimeSec, tp.tv_sec, diffSec);
+    osTimerChainNode_t* pNewNode;
+    if (diffSec >= OS_TIMEOUT_SUB_CHAIN_TIME)
+    {
+        pNewNode = osTimerFindChainNode(pTimerChain, true, diffSec, true);
+        if(pNewNode == NULL)
+        {
+            mlogError(LM_TIMER, "timer could not find a a chain node, diffTime=%ld", diffSec);
+            return 0;
+        }
+        mlogInfo(LM_TIMER, "new node=%p, nodeTimeSec=%ld.", pNewNode, pNewNode->nodeTimeSec);
+    }
+    else
+    {
+        pNewNode = pTimerChain;
+    }
+
+    time_t diffMsec = (tp.tv_sec - pNewNode->nodeTimeSec)*1000 + msec + tp.tv_nsec/1000000;
+	if(pTimerInfo == NULL)
+	{
+    	pTimerInfo = osmalloc(sizeof(osTimerInfo_t), NULL);
+	}
+    pTimerInfo->pData = pData;
+    pTimerInfo->callback = callback;
+	if(isTick)
+	{
+    	pTimerInfo->nextTimeout = msec;
+	}
+	else
+	{
+		pTimerInfo->nextTimeout = 0;
+	}
+
+    uint64_t timerId = osChainInsertTimerEvent(pNewNode, diffMsec, pTimerInfo);
+    mdebug(LM_TIMER, "diffMSec=%ld, pTimerChain=%p, new timerNode=%p", diffMsec, pTimerChain, pNewNode);
+	if(!isTick)
+	{
+    	mlogInfo(LM_TIMER, "start a timer, timeout=%ld, timerId=0x%lx, pTimerInfo=%p", msec, timerId, pTimerInfo);
+	}
+    osTimerListSubChainNodes(NULL);
+
+    return timerId;
+}
+
+
+
+static void osTimerExpireInternal(timeoutCallBackFunc_t callback, uint64_t timerId, osTimerInfo_t* pTimerInfo)
+{
+	if(!callback || !pTimerInfo)
+	{
+		logError("null pointer, callback=%p, pTimerInfo=%p", callback, pTimerInfo);
+		return;
+	}
+
+	if(pTimerInfo->nextTimeout != 0)
+	{
+		if(osStartTimerInternal(pTimerInfo->nextTimeout, pTimerInfo->callback, pTimerInfo->pData, pTimerInfo, true) <=0)
+		{
+			logError("fails to osStartTimerInternal.");
+			return;
+		}
+	}
+
+	callback(timerId, pTimerInfo->pData);
+
+	if(pTimerInfo->nextTimeout == 0)
+	{
+		osfree(pTimerInfo);
+	}
+}
+	
+	
+
+
+//to-remove
+static __thread int aaa = 0;
 static int osTimerTickExpire()
 {
 	if(pTimerChain->nodeTimeSec ==0)
 	{
 		return 0;
 	}
-		
+
+	//to-remove	
+#if 1
+	if(++aaa >= 600)
+	{
+		osmem_stat();
+		osmem_allusedinfo();
+		aaa = 0;
+	}
+#endif
+
 	struct timespec tp;
 	clock_gettime(CLOCK_REALTIME, &tp);
 	time_t diffSec = tp.tv_sec - pTimerChain->nodeTimeSec;
 	time_t diffMsec;
 	osTimerChainNode_t* pNewNode;
 	
-	//the timeout shall not jump ore than one timerChainNode
+	//the timeout shall not jump more than one timerChainNode
 	if(diffSec >= 2 * OS_TIMEOUT_SUB_CHAIN_TIME)
 	{
-		perror("panic!, timeExpire jumped.");
+		logError("panic!, timeExpire jumped, pTimerChain=%p, diffSec=%d, pTimerChain->nodeTimeSec=%d.", pTimerChain, diffSec, pTimerChain->nodeTimeSec);
 		return -1;
 	}
 	
+//	mlogInfo(LM_TIMER, "pTimerChain=%p, pTimerChain->nodeTimeSec=%d, diffSec=%d.", pTimerChain, pTimerChain->nodeTimeSec, diffSec);
 	//first handle the timeout in the current c:/hainNode.  There may have a small chance the timeout also happen
 	//in the next timerChainNode, that will be handled after the current chainNode is processed.
 	
@@ -182,7 +365,7 @@ static int osTimerTickExpire()
 	if(pTimerChain->pTimerSubChain == NULL && diffSec >= OS_TIMEOUT_SUB_CHAIN_TIME)
 	{
 		pNewNode = pTimerChain->pNext;
-		debug("move to next pTimerChain, pNewTimerChain=%p", pNewNode);
+		mdebug(LM_TIMER, "move to next pTimerChain, pNewTimerChain=%p", pNewNode);
 	}
 	else
 	{
@@ -191,22 +374,21 @@ static int osTimerTickExpire()
 		pNewNode = osChainFreeSubChainTimerEvents(pTimerChain, diffMsec);
 	}
 	
-	debug("pNewNode=%p, pNewNode->nodeTimeSec=%ld, pTimerChain->nodeTimeSec=%ld", pNewNode, pNewNode->nodeTimeSec, pTimerChain->nodeTimeSec);	
 	//the current chainNode is the only chainNode, or the next chainNode is not the neighbor node
 	if(pNewNode == NULL || pNewNode->nodeTimeSec > (pTimerChain->nodeTimeSec + OS_TIMEOUT_SUB_CHAIN_TIME))
 	{
 		pTimerChain->nodeId += 1;
 		pTimerChain->nodeTimeSec += OS_TIMEOUT_SUB_CHAIN_TIME;
 		pTimerChain->pTimerSubChain = NULL;
-		debug("create a new timerChain node, nodeId=%d", pTimerChain->nodeId);
+		mdebug(LM_TIMER, "update pTimerChain(%p, nodeTimeSec=%ld, nodeId=%d)", pTimerChain, pTimerChain->nodeTimeSec, pTimerChain->nodeId);
 	}
 	//the next chainNode is not empty and is the neighbor, jump to it.  if pNewNode==pTimerChain, donothing more
 	else if (pNewNode != pTimerChain)
 	{
 		//free the current timerChainNode
-		free(pTimerChain);
+		osfree(pTimerChain);
 		pTimerChain = pNewNode;
-		debug("move to the new timerChain node, nodeId=%d", pNewNode->nodeId);
+		mdebug(LM_TIMER, "move to the new timerNode(%p, nodeTimeSec=%ld, nodeId=%d)", pNewNode, pNewNode->nodeTimeSec, pNewNode->nodeId);
 		
 		//now we need to check if any timeEvent in the newNode expires
 		if(diffSec >= OS_TIMEOUT_SUB_CHAIN_TIME)
@@ -215,7 +397,7 @@ static int osTimerTickExpire()
 			pNewNode = osChainFreeSubChainTimerEvents(pTimerChain, diffMsec);
 			if(pNewNode != pTimerChain)
 			{
-				perror("pNewNode != pTimerChain, we do not expect it");
+				logError("pNewNode != pTimerChain, we do not expect it");
 			}
 		}
 	}
@@ -234,10 +416,19 @@ static int osChainStopTimerFreeTimerEvent(osTimerChainNode_t* pCurNode, uint64_t
 		return -1;
 	}
 	
-	time_t diffMsec = (timerId >> OS_TIMER_ID_EVENT_BITS) & OS_TIMER_ID_SUBCHAIN_MASK;
-	
-	osTimerSubChainNode_t* pNode = osTimerFindSubChainNode(pCurNode, 0, diffMsec);
-	
+	uint32_t nodeId = (timerId >> (OS_TIMER_ID_EVENT_BITS + OS_TIMER_ID_SUBCHAIN_BITS)) & OS_TIMER_ID_CHAIN_MASK;
+
+    osTimerChainNode_t* pTargetNode = osTimerFindChainNodeById(pCurNode, nodeId);
+    if(pTargetNode == NULL)
+    {
+        mlogError(LM_TIMER, "timer could not find a a chain node, nodeId=%d", nodeId);
+        return 0;
+    }
+
+    uint32_t subNodeId = (timerId >> OS_TIMER_ID_EVENT_BITS) & OS_TIMER_ID_SUBCHAIN_MASK;
+
+	osTimerSubChainNode_t* pPrevNode;
+	osTimerSubChainNode_t* pNode = osTimerFindSubChainNodeById(pTargetNode, subNodeId, &pPrevNode);
 	if (pNode == NULL)
 	{
 		return -1;
@@ -253,15 +444,34 @@ static int osChainStopTimerFreeTimerEvent(osTimerChainNode_t* pCurNode, uint64_t
 		//a matching timerId found
 		if(timerId  == pTimerEvent->timerId)
 		{
-			free(pTimerEvent->pUserData);
-			free(pTimerEvent);
+//			osfree(pTimerEvent->pUserData);
+//			osfree(pTimerEvent);
 			pTimerEventPrev->pNext = pTimerEventNext;
-				
-			//if this is the first timerEvent, redirect the pNode->pTimerEvent
-			if(pNode->pTimerEvent == pTimerEventPrev)
+			
+			//if the removed event is the only event, free the subNode
+			if(--pNode->eventCount == 0)
 			{
-				pNode->pTimerEvent = pTimerEventNext;
+				if(pPrevNode == NULL)
+				{
+        			pTargetNode->pTimerSubChain = pNode->pNext;
+				}
+				else
+				{
+					pPrevNode->pNext = pNode->pNext;
+				}
+				osfree(pNode);	
 			}
+			else
+			{
+				//if this is the first timerEvent, redirect the pNode->pTimerEvent
+				if(pNode->pTimerEvent == pTimerEvent)
+				{
+					pNode->pTimerEvent = pTimerEventNext;
+				}
+			}
+
+            osfree(pTimerEvent->pUserData);
+            osfree(pTimerEvent);
 			return 0;
 		}
 
@@ -287,17 +497,15 @@ static osTimerChainNode_t* osChainFreeSubChainTimerEvents(osTimerChainNode_t* pC
 	osTimerSubChainNode_t* pNode = pCurNode->pTimerSubChain;
 	if(pNode == NULL)
 	{
-		debug("pTimerChain=%p, ->pTimerSubChain is NULL", pCurNode);
 		return pCurNode;
 	}
 
 	time_t newNodeMsec = (diffMsec / OS_TIMEOUT_SUB_CHAIN_INTERVAL) * OS_TIMEOUT_SUB_CHAIN_INTERVAL;
-	debug("newNodeMsec=%ld, Current timerChainNode=%p, pNode->nodeTimeMSec=%ld", newNodeMsec, pCurNode, pNode->nodeTimeMSec);
 	int nodeId = 0;
 	//remove all subChain node that has time stamp less than or equal to new one	
 	while (pNode != NULL && (pNode->nodeTimeMSec - newNodeMsec <=0))
 	{
-		debug("on subChain node (nodeId=%d), pNode->nodeTimeMSec=%ld, newNodeMsec=%ld", pNode->nodeId, pNode->nodeTimeMSec, newNodeMsec);
+		mdebug(LM_TIMER, "timerNode(%p), timerSubNode(%p, nodeId=%d, nodeTimeMSec=%ld, newNodeMsec=%ld) times out", pCurNode, pNode, pNode->nodeId, pNode->nodeTimeMSec, newNodeMsec);
 		osTimertEvent_t* pTimerEvent = pNode->pTimerEvent;
 		osTimertEvent_t* pTimerEventNext;
 		osTimertEvent_t* pTimerEventPrev = pTimerEvent;
@@ -305,26 +513,35 @@ static osTimerChainNode_t* osChainFreeSubChainTimerEvents(osTimerChainNode_t* pC
 		{
 			pTimerEventNext = pTimerEvent->pNext;
 
+			if(!((osTimerInfo_t*)pTimerEvent->pUserData)->nextTimeout)
+			{
+            	mlogInfo(LM_TIMER, "timerId=0x%lx expired.", pTimerEvent->timerId);
+			}
 			if(((osTimerInfo_t*)pTimerEvent->pUserData)->callback)
 			{
-				((osTimerInfo_t*)pTimerEvent->pUserData)->callback(pTimerEvent->timerId, ((osTimerInfo_t*)pTimerEvent->pUserData)->pData);
+				osTimerExpireInternal(((osTimerInfo_t*)pTimerEvent->pUserData)->callback, pTimerEvent->timerId, ((osTimerInfo_t*)pTimerEvent->pUserData));
+				//((osTimerInfo_t*)pTimerEvent->pUserData)->callback(pTimerEvent->timerId, ((osTimerInfo_t*)pTimerEvent->pUserData)->pData);
 			}
 			else
 			{
-				onTimeout(pTimerEvent->timerId, ((osTimerInfo_t*)pTimerEvent->pUserData)->pData);
+                osTimerExpireInternal(onTimeout, pTimerEvent->timerId, ((osTimerInfo_t*)pTimerEvent->pUserData));
+				//onTimeout(pTimerEvent->timerId, ((osTimerInfo_t*)pTimerEvent->pUserData)->pData);
 			}
-			free(pTimerEvent->pUserData);
-			free(pTimerEvent);
+
+			//osfree(pTimerEvent->pUserData);
+			osfree(pTimerEvent);
 			
 			pTimerEvent = pTimerEventNext;
 		}
 	
 		pCurNode->pTimerSubChain = pNode->pNext;
 		nodeId = pNode->nodeId;
-		free(pNode);
+		osfree(pNode);
 		pNode = pCurNode->pTimerSubChain;
+
+    	osTimerListSubChainNodes(NULL);
 	}
-		
+	
 	//this is the last possible subChianNode, the next timeout shall go to next timerChain 
 	if(nodeId == MAX_SUB_CHAIN_NODE_NUM)
 	{
@@ -334,23 +551,60 @@ static osTimerChainNode_t* osChainFreeSubChainTimerEvents(osTimerChainNode_t* pC
 	return pCurNode;
 }
 	
+
+static osTimerChainNode_t* osTimerFindChainNodeById(osTimerChainNode_t* pCurNode, uint32_t nodeId)
+{
+    if(pCurNode == NULL)
+    {
+        return NULL;
+    }
+
+    osTimerChainNode_t* pNode = pCurNode;
+    osTimerChainNode_t* pPrevNode = pNode;
+    int delta;
+    mdebug(LM_TIMER, "pNode=%p, target NodeId=%ld", pNode, nodeId);
+    while (pNode != NULL)
+    {
+        delta = pNode->nodeId - nodeId;
+        if(delta < 0)
+        {
+            pPrevNode = pNode;
+            pNode = pNode->pNext;
+        }
+        else if (delta == 0)
+        {
+            return pNode;
+        }
+	}
+
+	return NULL;
+}
 	
 	
-static osTimerChainNode_t* osTimerFindChainNode(osTimerChainNode_t* pCurNode, int isForceInsert, time_t diffSec)
+static osTimerChainNode_t* osTimerFindChainNode(osTimerChainNode_t* pCurNode, int isForceInsert, time_t sec, bool isDiffSec)
 {
 	if(pCurNode == NULL)
 	{
 		return NULL;
 	}
 	
-	time_t newNodeSec = pCurNode->nodeTimeSec + (diffSec / OS_TIMEOUT_SUB_CHAIN_TIME) * OS_TIMEOUT_SUB_CHAIN_TIME;
-	
+	time_t newNodeSec;
+	if(isDiffSec)
+	{
+		newNodeSec = pCurNode->nodeTimeSec + (sec / OS_TIMEOUT_SUB_CHAIN_TIME) * OS_TIMEOUT_SUB_CHAIN_TIME;
+	}
+	else
+	{
+		newNodeSec = sec;
+	}
+
 	osTimerChainNode_t* pNode = pCurNode;
 	osTimerChainNode_t* pPrevNode = pNode;
-	debug("pNode=%p, newNodeSec=%ld", pNode, newNodeSec);
+	int delta;
+	mdebug(LM_TIMER, "pNode=%p, newNodeSec=%ld", pNode, newNodeSec);
 	while (pNode != NULL)
 	{
-		int delta = pNode->nodeTimeSec - newNodeSec;
+		delta = pNode->nodeTimeSec - newNodeSec;
 		if(delta < 0)
 		{
 			pPrevNode = pNode;
@@ -364,7 +618,7 @@ static osTimerChainNode_t* osTimerFindChainNode(osTimerChainNode_t* pCurNode, in
 		{
 			if (isForceInsert)
 			{
-				osTimerChainNode_t* pChainNode = (osTimerChainNode_t*) malloc(sizeof(osTimerChainNode_t));
+				osTimerChainNode_t* pChainNode = (osTimerChainNode_t*) osmalloc(sizeof(osTimerChainNode_t), NULL);
 				if(pChainNode == NULL)
 				{
 					perror("could not allocate pChainNode");
@@ -372,13 +626,13 @@ static osTimerChainNode_t* osTimerFindChainNode(osTimerChainNode_t* pCurNode, in
 				}
 
 				pChainNode->nodeTimeSec = newNodeSec;
-				pChainNode->nodeId = diffSec / OS_TIMEOUT_SUB_CHAIN_TIME + 1;
+				pChainNode->nodeId = newNodeSec / OS_TIMEOUT_SUB_CHAIN_TIME + 1;
 				pChainNode->pTimerSubChain = NULL;
 				pChainNode->pNext = pNode;
 				
 				pPrevNode->pNext = pChainNode;
 		
-				debug("a new TimerChainNode is created, pChainNode=%p, nodeTimeSec=%ld, nodeId=%d", pChainNode, pChainNode->nodeTimeSec, pChainNode->nodeId);		
+				mdebug(LM_TIMER, "a new TimerChainNode is created, pChainNode=%p, nodeTimeSec=%ld, nodeId=%d", pChainNode, pChainNode->nodeTimeSec, pChainNode->nodeId);		
 				return pChainNode;
 			}
 
@@ -389,7 +643,7 @@ static osTimerChainNode_t* osTimerFindChainNode(osTimerChainNode_t* pCurNode, in
 	// if we are here, we are at the end of the chain list
 	if(pNode == NULL && isForceInsert)
 	{
-		osTimerChainNode_t* pChainNode = (osTimerChainNode_t*) malloc(sizeof(osTimerChainNode_t));
+		osTimerChainNode_t* pChainNode = (osTimerChainNode_t*) osmalloc(sizeof(osTimerChainNode_t), NULL);
 		if(pChainNode == NULL)
 		{
 			perror("could not allocate pChainNode");
@@ -397,16 +651,41 @@ static osTimerChainNode_t* osTimerFindChainNode(osTimerChainNode_t* pCurNode, in
 		}
 
 		pChainNode->nodeTimeSec = newNodeSec;
-		pChainNode->nodeId = diffSec / OS_TIMEOUT_SUB_CHAIN_TIME + 1;
+		pChainNode->nodeId = newNodeSec / OS_TIMEOUT_SUB_CHAIN_TIME + 1;
 		pChainNode->pTimerSubChain = NULL;
 		pChainNode->pNext = NULL;
 				
 		pPrevNode->pNext = pChainNode;
 				
-		debug("a new TimerChainNode is created in the end, pChainNode=%p, nodeTimeSec=%ld, nodeId=%d", pChainNode, pChainNode->nodeTimeSec, pChainNode->nodeId);
+		mdebug(LM_TIMER, "a new TimerChainNode is created in the end, pChainNode=%p, nodeTimeSec=%ld, nodeId=%d", pChainNode, pChainNode->nodeTimeSec, pChainNode->nodeId);
 		return pChainNode;	
 	}
 	
+	return NULL;
+}
+
+
+static osTimerSubChainNode_t* osTimerFindSubChainNodeById(osTimerChainNode_t* pChainNode, uint32_t subNodeId, osTimerSubChainNode_t** ppPrevSubNode)
+{
+    if(pChainNode == NULL)
+    {
+        return NULL;
+    }
+
+    osTimerSubChainNode_t* pNode = pChainNode->pTimerSubChain;
+	*ppPrevSubNode = NULL;
+    while (pNode != NULL)
+    {
+        mdebug(LM_TIMER, "pChainNode->pTimerSubChain=%p", pNode);
+		if(pNode->nodeId == subNodeId)
+		{
+			return pNode;
+		}
+           
+		*ppPrevSubNode = pNode; 
+        pNode = pNode->pNext;
+    }
+
 	return NULL;
 }
 
@@ -420,17 +699,17 @@ static osTimerSubChainNode_t* osTimerFindSubChainNode(osTimerChainNode_t* pChain
 	
 	if(mSec >= OS_TIMEOUT_SUB_CHAIN_TIME * 1000)
 	{
-		warn("the msec(%ld) > OS_TIMEOUT_SUB_CHAIN_TIME (%d)", mSec, OS_TIMEOUT_SUB_CHAIN_TIME);
+		logError("the msec(%ld) > OS_TIMEOUT_SUB_CHAIN_TIME (%d)", mSec, OS_TIMEOUT_SUB_CHAIN_TIME);
 		return NULL;
 	}
 	
 	time_t newNodeMsec = (mSec / OS_TIMEOUT_SUB_CHAIN_INTERVAL) * OS_TIMEOUT_SUB_CHAIN_INTERVAL;
 	
 	osTimerSubChainNode_t* pNode = pChainNode->pTimerSubChain;
-	osTimerSubChainNode_t* pPrevNode = pNode;
+	osTimerSubChainNode_t* pPrevNode = NULL;
 	while (pNode != NULL)
 	{
-		debug("pChainNode->pTimerSubChain=%p", pNode);
+		mdebug(LM_TIMER, "pChainNode->pTimerSubChain=%p", pNode);
 		time_t delta = pNode->nodeTimeMSec - newNodeMsec;
 		if(delta < 0)
 		{
@@ -439,17 +718,17 @@ static osTimerSubChainNode_t* osTimerFindSubChainNode(osTimerChainNode_t* pChain
 		}
 		else if (delta == 0)
 		{
-			debug("a subchain node already exists, nodeTimeMSec=%ld", pNode->nodeTimeMSec);
+			mdebug(LM_TIMER, "a subchain node already exists, nodeTimeMSec=%ld", pNode->nodeTimeMSec);
 			return pNode;
 		}
 		else
 		{
 			if (isForceInsert)
 			{
-				osTimerSubChainNode_t* pSubChainNode = (osTimerSubChainNode_t*) malloc(sizeof(osTimerSubChainNode_t));
+				osTimerSubChainNode_t* pSubChainNode = (osTimerSubChainNode_t*) osmalloc(sizeof(osTimerSubChainNode_t), NULL);
 				if(pSubChainNode == NULL)
 				{
-					perror("could not allocate pSubChainNode");
+					logError("could not allocate pSubChainNode");
 					return NULL;
 				}
 
@@ -459,10 +738,17 @@ static osTimerSubChainNode_t* osTimerFindSubChainNode(osTimerChainNode_t* pChain
 				pSubChainNode->pTimerEvent = NULL;
 				pSubChainNode->pLastTimerEvent = NULL;
 				pSubChainNode->pNext = pNode;
-				
-				pPrevNode->pNext = pSubChainNode;
-				
-				debug("a new subchain node is created, nodeTimeMSec=%ld, nodeId=%d", pSubChainNode->nodeTimeMSec, pSubChainNode->nodeId);
+			
+				if(pPrevNode == NULL)
+				{
+					pChainNode->pTimerSubChain = pSubChainNode;
+				}
+				else
+				{	
+					pPrevNode->pNext = pSubChainNode;
+				}
+			
+				mdebug(LM_TIMER, "a new subchain node is created, nodeTimeMSec=%ld, nodeId=%d", pSubChainNode->nodeTimeMSec, pSubChainNode->nodeId);
 				return pSubChainNode;
 			}
 			
@@ -473,10 +759,10 @@ static osTimerSubChainNode_t* osTimerFindSubChainNode(osTimerChainNode_t* pChain
 	// if we are here, we are at the end of the chain list
 	if (pNode == NULL && isForceInsert)
 	{
-		osTimerSubChainNode_t* pSubChainNode = (osTimerSubChainNode_t*) malloc(sizeof(osTimerSubChainNode_t));
+		osTimerSubChainNode_t* pSubChainNode = (osTimerSubChainNode_t*) osmalloc(sizeof(osTimerSubChainNode_t), NULL);
 		if(pSubChainNode == NULL)
 		{
-			perror("could not allocate pSubChainNode");
+			logError("could not allocate pSubChainNode");
 			return NULL;
 		}
 
@@ -497,7 +783,7 @@ static osTimerSubChainNode_t* osTimerFindSubChainNode(osTimerChainNode_t* pChain
 			pPrevNode->pNext = pSubChainNode;
 		}
 
-		debug("a new subchain node is created, pSubChainNode=%p, nodeTimeMSec=%ld, nodeId=%d", pSubChainNode, pSubChainNode->nodeTimeMSec, pSubChainNode->nodeId);
+		mdebug(LM_TIMER, "a new subchain node is created, pSubChainNode=%p, nodeTimeMSec=%ld, nodeId=%d", pSubChainNode, pSubChainNode->nodeTimeMSec, pSubChainNode->nodeId);
 		return pSubChainNode;
 	}
 	
@@ -511,7 +797,7 @@ static osTimertEvent_t* osTimerEventCreate(osTimerChainNode_t* pChainNode, osTim
 		return NULL;
 	}
 	
-	osTimertEvent_t* pTimerEvent = (osTimertEvent_t*) malloc(sizeof(osTimertEvent_t));
+	osTimertEvent_t* pTimerEvent = (osTimertEvent_t*) osmalloc(sizeof(osTimertEvent_t), NULL);
 	if(pTimerEvent == NULL)
 	{
 		perror("could not allocate pTimerEvent");
@@ -525,7 +811,7 @@ static osTimertEvent_t* osTimerEventCreate(osTimerChainNode_t* pChainNode, osTim
 	pTimerEvent->timerId |= pTimerEvent->nodeId;
 	pTimerEvent->pNext = NULL;	
 		
-	debug("a new timerEvent is created, timerId=%lx", pTimerEvent->timerId);	
+	mdebug(LM_TIMER, "a new timerEvent is created, timerId=%lx", pTimerEvent->timerId);	
 	return pTimerEvent;
 }
 	
@@ -537,20 +823,21 @@ static uint64_t osChainInsertTimerEvent(osTimerChainNode_t* pChainNode, time_t d
 		warn("diffMsec(%ld) >= OS_TIMEOUT_SUB_CHAIN_TIME(%d)", diffMsec, OS_TIMEOUT_SUB_CHAIN_TIME*1000);
 		return 0;
 	}
-			
-	osTimerSubChainNode_t* pNode = osTimerFindSubChainNode(pChainNode, 1, diffMsec);
+		
+	osTimerSubChainNode_t* pNode = osTimerFindSubChainNode(pChainNode, true, diffMsec);
 	if(pNode == NULL)
 	{
 		perror("could not allocate pSubChainNode");
 		return 0;
 	}
-		
+
+	mdebug(LM_TIMER, "subChainNode=%p, nodeTimeMSec=%d", pNode, pNode->nodeTimeMSec);		
 	pNode->eventCount++;
 		
 	osTimertEvent_t* pTimerEvent = osTimerEventCreate(pChainNode, pNode, pData);
 	if(pTimerEvent == NULL)
 	{
-		perror("could not allocate pTimerEvent");
+		logError("could not allocate pTimerEvent");
 		return 0;
 	}		
 			
@@ -558,12 +845,65 @@ static uint64_t osChainInsertTimerEvent(osTimerChainNode_t* pChainNode, time_t d
 	{
 		pNode->pTimerEvent = pTimerEvent;
 		pNode->pLastTimerEvent = pTimerEvent;
+		pTimerEvent->pNext = NULL;
 	}
 	else
 	{
 		pNode->pLastTimerEvent->pNext = pTimerEvent;
 		pNode->pLastTimerEvent = pTimerEvent;
+		pTimerEvent->pNext = NULL;
 	}	
-	
+
 	return pTimerEvent->timerId;
 }
+
+
+//only print out if the LM_TIMER module is configured on DEBUG level
+void osTimerListSubChainNodes(osTimerChainNode_t* pNode)
+{
+	//only print out if the LM_TIMER module is configured on DEBUG level
+	if(osDbg_isBypass(DBG_DEBUG, LM_TIMER))
+	{
+		return;
+	}
+		
+	if(!pNode)
+	{
+		pNode = pTimerChain;
+		if(!pNode)
+		{
+			mdebug(LM_TIMER, "timerSubNode list:\npTimeNode=NULL.");
+			return;
+		}
+	}
+
+	//size of 1080 is based on the 10 * each_subNode_print_size (which is current 107).  If each_subNode_print_size changes, the allocated buffer size shall also change.
+	char prtBuffer[1080];
+	int count=0, n=0;
+	osTimerSubChainNode_t* pSubNode = pNode->pTimerSubChain;
+	while(pSubNode)
+	{
+		n += sprintf(&prtBuffer[n], "pSubChainNode=%p, pNext=%p, nodeTimeMSec=%ld, eventCount=%d\n", pSubNode, pSubNode->pNext, pSubNode->nodeTimeMSec, pSubNode->eventCount);
+		if(++count == 10)
+		{
+			prtBuffer[n] = 0;
+			mdebug(LM_TIMER, "timerSubNode list:\npTimeNode=%p, nodeTimeSec=%ld, nodeId=%d\n%s", pNode, pNode->nodeTimeSec, pNode->nodeId, prtBuffer);
+			n = 0;
+			count =0;
+		}
+
+		pSubNode = pSubNode->pNext;
+	}
+
+	if(count >0)
+	{
+		prtBuffer[n] = 0;
+        mdebug(LM_TIMER, "timerSubNode list:\npTimeNode=%p, nodeTimeSec=%ld, nodeId=%d\n%s", pNode, pNode->nodeTimeSec, pNode->nodeId, prtBuffer);
+	}
+	else if(pNode->pTimerSubChain == NULL)
+	{
+		mdebug(LM_TIMER, "timerSubNode list:\npTimeNode=%p, nodeTimeSec=%ld, nodeId=%d\nNo timerSubNode.");
+	}
+}	
+
+		

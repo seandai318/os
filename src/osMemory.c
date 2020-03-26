@@ -13,7 +13,7 @@
 #include "osMBuf.h"
 #include "osMemory.h"
 #include "osPrintf.h"
-
+#include "osDebug.h"		//to-remove
 
 /** Defines a reference-counting memory object */
 typedef struct osMemHeader {
@@ -44,7 +44,27 @@ void* osMem_alloc(size_t size, osMemDestroy_h dh)
 	m->nrefs = 1;
 	m->dHandler = dh;
 
+logError("to-remove, MEM-DEBUG, alloc-addr=%p, count=1", (void*)(m + 1));
 	return (void*)(m + 1);
+}
+
+
+//the same as osMem_alloc, except ref=n
+void* osMem_nalloc(size_t size, osMemDestroy_h dh, uint32_t n)
+{
+    osMemHeader_t *m;
+
+    m = malloc(sizeof(osMemHeader_t) + size);
+    if (!m)
+    {
+        return NULL;
+    }
+
+    m->nrefs = n;
+    m->dHandler = dh;
+
+logError("to-remove, MEM-DEBUG, alloc-addr=%p, count=%d", (void*)(m + 1), n);
+    return (void*)(m + 1);
 }
 
 
@@ -63,6 +83,7 @@ void* osMem_dalloc(const void* src, size_t size, osMemDestroy_h dh)
     m->dHandler = dh;
 	memcpy((void*)(m + 1), src, size);
 
+logError("to-remove, MEM-DEBUG, alloc-addr=%p, count=1", (void*)(m + 1));
     return (void*)(m + 1);
 }
 
@@ -87,6 +108,7 @@ void* osMem_zalloc(size_t size, osMemDestroy_h dh)
 
 	memset(p, 0, size);
 
+logError("to-remove, MEM-DEBUG, alloc-addr=%p, count=1", p);
 	return p;
 }
 
@@ -179,7 +201,27 @@ void* osMem_ref(void *ptr)
 
 	++m->nrefs;
 
+logError("to-remove, MEM-DEBUG, alloc-addr=%p, count=%d", ptr, m->nrefs);
+
 	return ptr;
+}
+
+
+//assign number of ref number
+void* osMem_nref(void *ptr, uint32_t n)
+{
+    osMemHeader_t *m;
+
+    if (!ptr)
+    {
+        return NULL;
+    }
+
+    m = ((osMemHeader_t *)ptr) - 1;
+
+	m->nrefs = n;
+
+    return ptr;
 }
 
 
@@ -202,6 +244,13 @@ void* osMem_deref(void *pData)
 
 	m = ((osMemHeader_t *)pData) - 1;
 
+logError("to-remove, MEM-DEBUG, pData=%p, nrefs=%ld", pData, m->nrefs);
+	if(m->nrefs == 0)
+	{
+		logError("try to free a already deallocated memory(%p).", pData);
+		return NULL;
+	}
+ 
 	if (--m->nrefs == 0)
 	{
 		if (m->dHandler)

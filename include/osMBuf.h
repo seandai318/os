@@ -13,6 +13,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include "osTypes.h"
+#include "osPL.h"
 
 
 #ifndef RELEASE
@@ -44,7 +45,7 @@ typedef struct osMBuf {
 } osMBuf_t;
 
 
-struct osPointerLen;
+//struct osPointerLen;
 //struct osPrintf;
 
 osMBuf_t *osMBuf_alloc(size_t size);
@@ -58,6 +59,7 @@ void     osMBuf_reset(osMBuf_t *mb);
 void 	 osMBuf_dealloc(osMBuf_t *mb);
 int      osMBuf_realloc(osMBuf_t *mb, size_t size);
 int      osMBuf_shift(osMBuf_t *mb, ssize_t shift);
+int 	osMBuf_modifyStr(osMBuf_t *mb, char* str, size_t strLen, size_t pos);
 int      osMBuf_writeBuf(osMBuf_t *mb, const uint8_t *buf, size_t size, bool isAdvancePos);
 //copy the srcmb buf between the startPos and stopPos (the characters including startPos until stopPos-1) to destmb.
 int 	osMBuf_writeBufRange(osMBuf_t *destmb, const osMBuf_t *srcmb, size_t startPos, size_t stopPos, bool isAdvancePos);
@@ -72,6 +74,8 @@ int 	osMBuf_writeU64Str(osMBuf_t *mb, uint64_t v, bool isAdvancePos);
 int      osMBuf_writeStr(osMBuf_t *mb, const char *str, bool isAdvancePos);
 int      osMBuf_writePL(osMBuf_t *mb, const struct osPointerLen *pl, bool isAdvancePos);
 int      osMBuf_writePLskipSection(osMBuf_t *mb, const struct osPointerLen *pl, const struct osPointerLen *skip, bool isAdvancePos);
+//write until a pattern is meet, the writing ends after the last character of the pattern
+int 	osMBuf_writeUntil(osMBuf_t *mb, const osPointerLen_t* src, const osPointerLen_t* pattern, bool isAdvancePos);
 int      osMBuf_readBuf(osMBuf_t *mb, uint8_t *buf, size_t size);
 uint8_t  osMBuf_readU8(osMBuf_t *mb);
 uint16_t osMBuf_readU16(osMBuf_t *mb);
@@ -83,6 +87,8 @@ int      osMBuf_fill(osMBuf_t *mb, uint8_t c, size_t n);
 int      osMBuf_debug(FILE* pf, const osMBuf_t *mb);
 void osMBuf_advance(osMBuf_t *mb, ssize_t n);
 void osMBuf_setPos(osMBuf_t *mb, size_t pos);
+ssize_t osMbuf_findMatch(osMBuf_t* pBuf, osPointerLen_t* pattern);
+ssize_t osMbuf_findValue(osMBuf_t* pBuf, char tag1, char tag2, bool isExclSpace, osPointerLen_t* pValue);
 
 /**
  * Get the buffer from the current position

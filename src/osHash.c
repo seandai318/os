@@ -163,14 +163,22 @@ uint32_t osHash_getBucketElementsCount(osListElement_t* pLE)
 		return 0;
 	}
 
-	osList_t* pList = pLE->list;
-	if(!pList)
-	{
-		logError("the hash list element is not linked in");
-		return 0;
-	}
+	uint32_t count = 0;
+    osList_t* pList = pLE->list;
+    if(!pList)
+    {
+        logError("the hash list element is not linked in");
+        return 0;
+    }
 
-	return osList_getCount(pList);
+	pthread_mutex_t* pMutex = &((osHashBucketInfo_t*)pList)->bucketMutex;
+    pthread_mutex_lock(pMutex);
+
+	count = osList_getCount(pList);
+
+    pthread_mutex_unlock(pMutex);
+
+	return count;	
 }
 
 
@@ -213,18 +221,19 @@ osListElement_t* osHash_addElement(osHash_t *h, uint32_t key, void *data, osList
 	}
 
 	osListElement_t* pLE;
+	uint32_t index = key & (h->bsize-1);
 
-	pthread_mutex_lock(&h->bucket[key & (h->bsize-1)].bucketMutex);
+	pthread_mutex_lock(&h->bucket[index].bucketMutex);
 	if(pHashElement ==  NULL)
 	{
-		pLE = osList_append(&h->bucket[key & (h->bsize-1)].bucketList, data);
+		pLE = osList_append(&h->bucket[index].bucketList, data);
 	}
 	else
 	{
-		osList_appendLE(&h->bucket[key & (h->bsize-1)].bucketList, pHashElement, data);
+		osList_appendLE(&h->bucket[index].bucketList, pHashElement, data);
 		pLE = pHashElement;
 	}
-	pthread_mutex_unlock(&h->bucket[key & (h->bsize-1)].bucketMutex);
+	pthread_mutex_unlock(&h->bucket[index].bucketMutex);
 
 	return pLE;
 }
@@ -235,17 +244,70 @@ osListElement_t* osHash_addElement(osHash_t *h, uint32_t key, void *data, osList
  *
  * @param le     List element
  */
-void osHash_deleteElement(osListElement_t* pHashElement)
+void osHash_deleteNode(osListElement_t* pHashElement)
 {
-	osList_unlinkElement(pHashElement);
+	if(!pHashElement)
+	{
+		logError("null pointer, pHashElement.");
+		return;
+	}
+
+    osList_t* pList = pHashElement->list;
+    if(!pList)
+    {
+        logError("the hash list element is not linked in");
+        return;
+    }
+
+    pthread_mutex_t* pMutex = &((osHashBucketInfo_t*)pList)->bucketMutex;
+    pthread_mutex_lock(pMutex);
+
+    osList_unlinkElement(pHashElement);
+
+    pthread_mutex_unlock(pMutex);
 }
 
 
-void osHash_deleteElementByKey(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg)
+void osHash_deleteNodeByKey1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg)
 {
-	osListElement_t* pHE = osHash_lookup(h, key, ah, arg);
+	osListElement_t* pHE = osHash_lookup1(h, key, ah, arg);
 
-	osHash_deleteElement(pHE);
+	osHash_deleteNode(pHE);
+}
+
+
+void osHash_deleteNodeByKey(const osHash_t *h, osHashData_t* pHashData)
+{
+    if(!h || !pHashData)
+    {
+        logError("invalid NULL passing in parameters");
+        return;
+    }
+
+    uint32_t hashKey = 0;
+    switch (pHashData->hashKeyType)
+    {
+        case OSHASHKEY_STR:
+            hashKey = osHash_getKeyStr(pHashData->hashKeyStr.str, pHashData->hashKeyStr.len, pHashData->hashKeyStr.isCase);
+            break;
+        case OSHASHKEY_INT:
+            hashKey = pHashData->hashKeyInt;
+            break;
+        case OSHASHKEY_PL:
+            hashKey = osHash_getKeyPL(pHashData->hashKeyPL.pPL, pHashData->hashKeyPL.isCase);
+            break;
+        default:
+            logError("invalid hashKeyType (%d)", pHashData->hashKeyType);
+            return;
+    }
+
+    pthread_mutex_lock(&h->bucket[hashKey & (h->bsize-1)].bucketMutex);
+
+    osListElement_t* pLE = osList_lookup(&h->bucket[hashKey & (h->bsize-1)].bucketList, true, osHashCompare, pHashData);
+
+    osList_unlinkElement(pLE);
+
+    pthread_mutex_unlock(&h->bucket[hashKey & (h->bsize-1)].bucketMutex);
 }
 
 
@@ -259,7 +321,7 @@ void osHash_deleteElementByKey(const osHash_t *h, uint32_t key, osListApply_h ah
  *
  * @return List element if traversing stopped, otherwise NULL
  */
-osListElement_t* osHash_lookup(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg)
+osListElement_t* osHash_lookup1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg)
 {
 	if (!h || !ah)
 	{
@@ -274,7 +336,7 @@ osListElement_t* osHash_lookup(const osHash_t *h, uint32_t key, osListApply_h ah
 }
 
 
-osListElement_t* osHash_lookup1(const osHash_t *h, osHashData_t* pHashData)
+osListElement_t* osHash_lookup(const osHash_t *h, osHashData_t* pHashData)
 {
 	if(!h || !pHashData)
 	{
@@ -299,7 +361,7 @@ osListElement_t* osHash_lookup1(const osHash_t *h, osHashData_t* pHashData)
 			return NULL;
 	}
 
-	return osHash_lookup(h, hashKey, osHashCompare, pHashData);
+	return osHash_lookup1(h, hashKey, osHashCompare, pHashData);
 }
 
 
@@ -334,7 +396,7 @@ osListElement_t* osHash_lookupByKey(const osHash_t *h, void* key, osHashKeyType_
 			return NULL;
 	}
 
-    return osHash_lookup(h, hashKey, osHashCompare, &hashData);
+    return osHash_lookup1(h, hashKey, osHashCompare, &hashData);
 }
 
 
@@ -485,6 +547,17 @@ uint32_t osHash_getKeyPL(const osPointerLen_t* pPL, bool isCase)
     }
 
 	return hashKey;
+}
+
+
+void* osHash_getData(osListElement_t* pHashLE)
+{
+	if(!pHashLE)
+	{
+		return NULL;
+	}
+
+	return ((osHashData_t*)pHashLE->data)->pData;
 }
 
 
