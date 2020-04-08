@@ -351,6 +351,19 @@ void* osList_deleteElement(osList_t* pList, osListApply_h applyHandler, void *ar
 }
 
 
+void osList_deleteElementAll(osListElement_t* pLE)
+{
+	if(!pLE)
+	{
+		return;
+	}
+
+	osList_unlinkElement(pLE);
+    osMem_deref(pLE->data);
+    osfree(pLE);
+}
+
+
 /**
  * Sort a linked list in an order defined by the sort handler
  *
@@ -665,4 +678,17 @@ void osListPlus_clear(osListPlus_t* pList)
 	}
 
 	pList->num = 0;
-}	
+}
+
+void osListPlus_delete(osListPlus_t* pList)
+{
+    if(!pList)
+    {
+        return;
+    }
+
+	osMem_deref(pList->first);
+	osList_delete(&pList->more);
+	pList->first = NULL;
+}
+		

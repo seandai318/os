@@ -79,6 +79,8 @@ void osList_orderAppend(osList_t *list, osListSortHandler sortHandler, void* dat
 void osList_unlinkElement(osListElement_t *le);
 //delete a element based on the stored data.
 void* osList_deleteElement(osList_t* pList, osListApply_h applyHandler, void *arg);
+//delete a element by element address, the data pointed by the element is also deleted.
+void osList_deleteElementAll(osListElement_t* pLE);
 void osList_sort(osList_t *list, osListSortHandler sortHandler, void *arg);
 osListElement_t *osList_lookup(const osList_t *list, bool fwd, osListApply_h applyHandler, void *arg);
 osListElement_t* osList_getHead(const osList_t *list);
@@ -88,6 +90,7 @@ osStatus_e osList_addString(osList_t *pList, char* nameParam, size_t nameLen);
 
 osStatus_e osListPlus_append(osListPlus_t* pList, void* pData);
 void osListPlus_clear(osListPlus_t* pList);
+void osListPlus_delete(osListPlus_t* pList);
 
 
 

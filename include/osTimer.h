@@ -26,7 +26,8 @@
 typedef void (*timeoutCallBackFunc_t)(uint64_t timerId, void* ptr);
 
 typedef struct osTimerInfo {
-	uint32_t nextTimeout;		//msec, fot tick, if one time timeout, this value shall be set to 0
+	uint32_t nextTimeout;		//msec, for tick, if one time timeout, this value shall be set to 0
+	uint32_t restartTimeout;	//msec, for timerRestart, store the user specified timeout value
 	timeoutCallBackFunc_t callback;
 	void* pData;
 } osTimerInfo_t;
@@ -63,8 +64,12 @@ int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeou
 int osTimerModuleInit(int* timerWriteFd);
 int osTimerGetMsg(osInterface_e intf, void* pMsg);
 uint64_t osStartTimer(time_t msec, timeoutCallBackFunc_t callback, void* pData);
+uint64_t osvStartTimer(time_t msec, timeoutCallBackFunc_t callback, void* pData, char* info);
 uint64_t osStartTick(time_t msec, timeoutCallBackFunc_t callback, void* pData);
+uint64_t osRestartTimer(uint64_t timerId);
 int osStopTimer(uint64_t timerId);
+int osvStopTimer(uint64_t timerId, char* info);
+
 //if LM_TIMER DEBUG level is not turned on, this function does nothing
 void osTimerListSubChainNodes(osTimerChainNode_t* pNode);
 

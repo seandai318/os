@@ -27,7 +27,8 @@ typedef enum {
 
 
 typedef enum {
-	LM_TIMER,
+	LM_TIMER,		//OS timer
+	LM_MEM,			//OS memory
 	LM_SIPP,		//SIP Parser
 	LM_SIPTR,		//SIP Transaction
 	LM_TRANSPORT,	//SIP Transportation

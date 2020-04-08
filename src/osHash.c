@@ -92,7 +92,7 @@ osListElement_t* osHash_add(osHash_t *h, osHashData_t* pHashData)
 {
     if(!h || !pHashData)
     {
-        logError("invalid NULL passing in parameters");
+        logError("invalid NULL passing in parameters, h=%p, pHashData=%p.", h, pHashData);
         return NULL;
     }
 

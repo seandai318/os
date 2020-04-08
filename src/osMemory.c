@@ -44,7 +44,7 @@ void* osMem_alloc(size_t size, osMemDestroy_h dh)
 	m->nrefs = 1;
 	m->dHandler = dh;
 
-logError("to-remove, MEM-DEBUG, alloc-addr=%p, count=1", (void*)(m + 1));
+	mdebug(LM_MEM, "alloc-addr=%p, req size=%ld, nrefs=1", (void*)(m + 1), size);
 	return (void*)(m + 1);
 }
 
@@ -63,7 +63,7 @@ void* osMem_nalloc(size_t size, osMemDestroy_h dh, uint32_t n)
     m->nrefs = n;
     m->dHandler = dh;
 
-logError("to-remove, MEM-DEBUG, alloc-addr=%p, count=%d", (void*)(m + 1), n);
+	mdebug(LM_MEM, "alloc-addr=%p, req size=%ld, nrefs=%d", (void*)(m + 1), size, n);
     return (void*)(m + 1);
 }
 
@@ -83,7 +83,7 @@ void* osMem_dalloc(const void* src, size_t size, osMemDestroy_h dh)
     m->dHandler = dh;
 	memcpy((void*)(m + 1), src, size);
 
-logError("to-remove, MEM-DEBUG, alloc-addr=%p, count=1", (void*)(m + 1));
+	mdebug(LM_MEM, "alloc-addr=%p, req size=%ld, nrefs=1", (void*)(m + 1), size);
     return (void*)(m + 1);
 }
 
@@ -108,7 +108,7 @@ void* osMem_zalloc(size_t size, osMemDestroy_h dh)
 
 	memset(p, 0, size);
 
-logError("to-remove, MEM-DEBUG, alloc-addr=%p, count=1", p);
+	mdebug(LM_MEM, "alloc-addr=%p, req size=%ld, nrefs=1", p, size);
 	return p;
 }
 
@@ -201,7 +201,7 @@ void* osMem_ref(void *ptr)
 
 	++m->nrefs;
 
-logError("to-remove, MEM-DEBUG, alloc-addr=%p, count=%d", ptr, m->nrefs);
+	mdebug(LM_MEM, "ref-alloc-addr=%p, nrefs=%d", ptr, m->nrefs);
 
 	return ptr;
 }
@@ -244,7 +244,7 @@ void* osMem_deref(void *pData)
 
 	m = ((osMemHeader_t *)pData) - 1;
 
-logError("to-remove, MEM-DEBUG, pData=%p, nrefs=%ld", pData, m->nrefs);
+	mdebug(LM_MEM, "de-alloc-addr=%p, nrefs=%ld", pData, m->nrefs);
 	if(m->nrefs == 0)
 	{
 		logError("try to free a already deallocated memory(%p).", pData);
