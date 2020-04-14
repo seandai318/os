@@ -66,6 +66,8 @@ typedef bool (*osListSortHandler)(osListElement_t *le1, osListElement_t *le2, vo
 void osList_init(osList_t *list);
 //delete the osList_t overhead plus deref the data
 void osList_delete(osList_t *list);
+//to to used when a list object is created via dynamic memory allocation, as a cleanup function for osfree.
+void osList_cleanup(void* pData);
 //only delete the osList_t, data is not touched
 void osList_clear(osList_t *list);
 osListElement_t* osList_append(osList_t *list, void *data);

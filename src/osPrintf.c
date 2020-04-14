@@ -704,7 +704,7 @@ int osPrintf_onDynBuffer(char **strp, const char *fmt, va_list ap)
 	}
 
 	dp.size = 16;
-	dp.str  = osMem_alloc(dp.size, NULL);
+	dp.str  = osmalloc_r(dp.size, NULL);
 	if (!dp.str)
 	{
 		return ENOMEM;
@@ -724,7 +724,7 @@ int osPrintf_onDynBuffer(char **strp, const char *fmt, va_list ap)
  out:
 	if (err)
 	{
-		osMem_deref(dp.str);
+		osfree(dp.str);
 	}
 	else
 	{

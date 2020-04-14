@@ -55,12 +55,17 @@ logError("to-remove, delete, addr=%p, total element=%d", pList, osList_getCount(
 		osfree(pLE);
 
 		pLE = pNext;
-        osMem_deref(data);
-
-//		osfree(data);
+        osfree(data);
 	}
 
 	osList_init(pList);
+}
+
+
+//to to used when a list object is created via dynamic memory allocation, as a cleanup function for osfree.
+void osList_cleanup(void* pData)
+{
+	osList_delete(pData);
 }
 
 
@@ -359,7 +364,7 @@ void osList_deleteElementAll(osListElement_t* pLE)
 	}
 
 	osList_unlinkElement(pLE);
-    osMem_deref(pLE->data);
+    osfree(pLE->data);
     osfree(pLE);
 }
 
@@ -586,7 +591,7 @@ void osList_orderAppend(osList_t *list, osListSortHandler sortHandler, void* dat
 	osListElement_t* pLE2 = osmalloc_r(sizeof(osListElement_t), NULL);
 	if(!pLE2)
 	{
-		logError("osMem_alloc fails.");
+		logError("osmalloc_r fails.");
 		return;
 	}
 
@@ -687,7 +692,7 @@ void osListPlus_delete(osListPlus_t* pList)
         return;
     }
 
-	osMem_deref(pList->first);
+	osfree(pList->first);
 	osList_delete(&pList->more);
 	pList->first = NULL;
 }

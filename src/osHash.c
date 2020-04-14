@@ -25,7 +25,7 @@ static void osHash_destructor(void *data)
 {
 	osHash_t *h = data;
 
-	osMem_deref(h->bucket);
+	osfree(h->bucket);
 }
 
 
@@ -55,29 +55,32 @@ osHash_t* osHash_create(uint32_t bsize)
 	}
     bsize = 1<<x;
 
-	h = osMem_zalloc(sizeof(osHash_t), osHash_destructor);
+	h = oszalloc(sizeof(osHash_t), osHash_destructor);
 	if (!h)
 	{
+        logError("fails to oszalloc for h");
+
 		return NULL;
 	}
 
 	h->bsize = bsize;
 
-	h->bucket = osMem_zalloc(bsize*sizeof(osHashBucketInfo_t), NULL);
+	h->bucket = oszalloc(bsize*sizeof(osHashBucketInfo_t), NULL);
 	if (!h->bucket) 
 	{
+		logError("fails to oszalloc for h->bucket, bsize=%u, requiredSize=%u.", bsize, bsize*sizeof(osHashBucketInfo_t));
 		err = 1;
-		osMem_deref(h);
+		goto EXIT;
 	}
 	for(int i=0; i<bsize; i++)
 	{
 		pthread_mutex_init(&h->bucket[i].bucketMutex, NULL);
 	} 
 
- out:
+ EXIT:
 	if (err)
 	{
-		osMem_deref(h);
+		osfree(h);
 		return NULL;
 	}
 	else

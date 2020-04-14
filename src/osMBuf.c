@@ -15,12 +15,15 @@
 
 enum {DEFAULT_SIZE=512};
 
+static osMBuf_t* osMBuf_allocInternal(size_t size, bool isNeedMutex);
+static osMBuf_t *osMBuf_allocRefInternal(osMBuf_t *mbr, bool isNeedMutex);
+
 
 static void osMBuf_destructor(void *data)
 {
 	osMBuf_t *mb = data;
 
-	osMem_deref(mb->buf);
+	osfree(mb->buf);
 }
 
 
@@ -31,22 +34,60 @@ static void osMBuf_destructor(void *data)
  *
  * @return New memory buffer, NULL if no memory
  */
-osMBuf_t* osMBuf_alloc(size_t size)
+static osMBuf_t* osMBuf_allocInternal(size_t size, bool isNeedMutex)
 {
 	osMBuf_t *mb;
 
-	mb = osMem_zalloc(sizeof(*mb), osMBuf_destructor);
+	if(!size)
+	{
+		return NULL;
+	}
+
+	if(isNeedMutex)
+	{
+		mb = oszalloc_r(sizeof(*mb), osMBuf_destructor);
+	}
+	else
+	{
+        mb = oszalloc(sizeof(*mb), osMBuf_destructor);
+	}
 	if (!mb)
 	{
 		return NULL;
 	}
 
-	if (osMBuf_realloc(mb, size ? size : DEFAULT_SIZE))
+
+    uint8_t *buf;
+
+    if(isNeedMutex)
 	{
-		return osMem_deref(mb);
+    	mb->buf = osmalloc_r(size, NULL);
 	}
+	else
+	{
+        mb->buf = osmalloc(size, NULL);
+    }
+    if (!mb->buf)
+    {
+		osfree(mb);
+        return NULL;
+    }
+
+    mb->size = size;
 
 	return mb;
+}
+
+
+osMBuf_t* osMBuf_alloc(size_t size)
+{
+    return osMBuf_allocInternal(size, false);
+}
+
+
+osMBuf_t* osMBuf_alloc_r(size_t size)
+{
+	return osMBuf_allocInternal(size, true);
 }
 
 
@@ -57,7 +98,7 @@ osMBuf_t* osMBuf_alloc(size_t size)
  *
  * @return New memory buffer, NULL if no memory
  */
-osMBuf_t *osMBuf_allocRef(osMBuf_t *mbr)
+static osMBuf_t *osMBuf_allocRefInternal(osMBuf_t *mbr, bool isNeedMutex)
 {
 	osMBuf_t *mb;
 
@@ -66,13 +107,20 @@ osMBuf_t *osMBuf_allocRef(osMBuf_t *mbr)
 		return NULL;
 	}
 
-	mb = osMem_zalloc(sizeof(*mb), osMBuf_destructor);
+	if(isNeedMutex)
+	{
+		mb = oszalloc_r(sizeof(*mb), osMBuf_destructor);
+	}
+	else
+	{
+		mb = oszalloc(sizeof(*mb), osMBuf_destructor);
+    }
 	if (!mb)
 	{
 		return NULL;
 	}
 
-	mb->buf  = osMem_ref(mbr->buf);
+	mb->buf  = osmemref(mbr->buf);
 	mb->size = mbr->size;
 	mb->pos  = mbr->pos;
 	mb->end  = mbr->end;
@@ -80,7 +128,20 @@ osMBuf_t *osMBuf_allocRef(osMBuf_t *mbr)
 	return mb;
 }
 
-//use the original buffer's pos.  Be noted osMem_ref is not called, pDupMBuf shall be used as a temporary helping variable, shall be live longer than pOrigMBuf
+
+osMBuf_t *osMBuf_allocRef(osMBuf_t *mbr)
+{
+	return osMBuf_allocRefInternal(mbr, false);
+}
+
+
+osMBuf_t *osMBuf_allocRef_r(osMBuf_t *mbr)
+{
+    return osMBuf_allocRefInternal(mbr, true);
+}
+
+
+//use the original buffer's pos.  Be noted osMem_ref is not called, pDupMBuf shall be used as a temporary helping variable, shall NOT be live longer than pOrigMBuf
 void osMBuf_allocRef1(osMBuf_t* pDupMBuf, osMBuf_t* pOrigMBuf, size_t newPos, size_t len)
 {
 	if(!pDupMBuf || !pOrigMBuf)
@@ -142,7 +203,7 @@ void osMBuf_reset(osMBuf_t *mb)
 		return;
 	}
 
-	mb->buf = osMem_deref(mb->buf);
+	mb->buf = osfree(mb->buf);
 	osMBuf_init(mb);
 }
 
@@ -154,8 +215,8 @@ void osMBuf_dealloc(osMBuf_t *mb)
 		return;
 	}
 
-	mb->buf = osMem_deref(mb->buf);
-	osMem_deref(mb);
+//	mb->buf = osfree(mb->buf);  this function shall be called as part of osfree(mb)
+	osfree(mb);
 }
 
 
@@ -166,14 +227,14 @@ void osMBuf_dealloc(osMBuf_t *mb)
  * @param size New buffer size, if size=0, trim the unused buf
  *
  * @return 0 if success, otherwise errorcode
+ *
+ * isNeedMutex is deduced from mb
  */
 int osMBuf_realloc(osMBuf_t *mb, size_t size)
 {
-	uint8_t *buf;
-
 	if (!mb)
 	{
-		return EINVAL;
+		return -1;
 	}
 
 	if(!size)
@@ -185,13 +246,20 @@ int osMBuf_realloc(osMBuf_t *mb, size_t size)
 		}
 	}
 
-	buf = mb->buf ? osMem_realloc(mb->buf, size) : osMem_alloc(size, NULL);
-	if (!buf)
+	if(osmem_isNeedMutex(mb))
 	{
-		return ENOMEM;
+		mb->buf = mb->buf ? osrealloc(mb->buf, size) : osmalloc_r(size, NULL);
+	}
+	else
+	{
+        mb->buf = mb->buf ? osrealloc(mb->buf, size) : osmalloc(size, NULL);
+    }
+
+	if (!mb->buf)
+	{
+		return -1;
 	}
 
-	mb->buf  = buf;
 	mb->size = size;
 
 	return 0;
@@ -677,7 +745,7 @@ int osMBuf_strdup(osMBuf_t *mb, char **strp, size_t len)
 		return EINVAL;
 	}
 
-	str = osMem_alloc(len + 1, NULL);
+	str = osmalloc(len + 1, NULL);
 	if (!str)
 	{
 		return ENOMEM;
@@ -694,7 +762,7 @@ int osMBuf_strdup(osMBuf_t *mb, char **strp, size_t len)
  out:
 	if (err)
 	{
-		osMem_deref(str);
+		osfree(str);
 	}
 	else
 	{

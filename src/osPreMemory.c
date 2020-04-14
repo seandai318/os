@@ -30,7 +30,7 @@
 #include "osPreMemory.h"
 
 
-#define OS_PREMEM_MAX_IDX       	10		//this number does not include Mutex
+#define OS_PREMEM_MAX_IDX       	13		//this number does not include Mutex
 #define OS_PREMEM_MAX_CHUNK_SIZE    11000
 #define OS_PREMEM_MAX_MUTEX_POLL	30010
 #define OS_PREMEM_MAX_DEBUG_SIZE	80
@@ -71,10 +71,21 @@ typedef struct preMemIdx {
 
 static osPreMemBlockHdr_t* osPreMem_allocBlocks(uint8_t idx, uint32_t memSize, uint32_t memNum, osPreMemBlockHdr_t** ppEnd);
 static char* osPreMem_usedInfo1(uint8_t idx, int* n, uint32_t* count);
+static void* osPreMem_get(uint32_t size, bool isPrintDebug);
+static void* osPreMem_alloc_internal(size_t size, osPreMemFree_h dh, bool isNeedMutex, bool isPrintDebug);
+static void* osPreMem_realloc_internal(void* pData, size_t size, bool isPrintDebug);
+static void osPreMem_release(void* ptr, bool isPrintDebug);
+static void* osPreMem_free_internal(void *pData, bool isPrintDebug);
+#ifdef PREMEM_DEBUG
+static void* osPreMem_allocDebug_internal(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line, bool isPrintDebug);
+static void* osPreMem_dallocDebug_internal(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line, bool isPrintDebug);
+static void* osPreMem_zallocDebug_internal(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line, bool isPrintDebug);
+static void* osPreMem_reallocDebug_internal(void* pData, size_t size, char* file, const char* func, int line, bool isPrintDebug);
+#endif
 
-
-static uint32_t osPreMemSize[OS_PREMEM_MAX_IDX+1] = {16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, sizeof(pthread_mutex_t)};
-static uint32_t osPreMemNum[OS_PREMEM_MAX_IDX+1] = {10010, 10010, 10010, 10010, 10010,10010, 10010,10010, 10010, 10010, OS_PREMEM_MAX_MUTEX_POLL};
+//65536 for trHash and tpServerLB hash, 262144 for proxy hash, 1048576 for reg hash
+static uint32_t osPreMemSize[OS_PREMEM_MAX_IDX+1] = {16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 65536, 262144, 1048576, sizeof(pthread_mutex_t)};
+static uint32_t osPreMemNum[OS_PREMEM_MAX_IDX+1] = {10010, 10010, 10010, 10010, 10010,10010, 10010,10010, 10010, 10010, 2, 1, 1, OS_PREMEM_MAX_MUTEX_POLL};
 static osPreMemIdx_t osPreMemUnused[OS_PREMEM_MAX_IDX+1];
 #ifdef PREMEM_DEBUG
 static osPreMemIdx_t osPreMemUsed[OS_PREMEM_MAX_IDX+1];
@@ -174,7 +185,7 @@ static osPreMemBlockHdr_t* osPreMem_allocBlocks(uint8_t idx, uint32_t memSize, u
 }
 
 
-void* osPreMem_get(uint32_t size)
+static void* osPreMem_get(uint32_t size, bool isPrintDebug)
 {
 	void* ptr = NULL;
 
@@ -233,6 +244,10 @@ void* osPreMem_get(uint32_t size)
             pthread_mutex_unlock(&osPreMemUsed[i].mutex);
 #endif
 
+			if(isPrintDebug)
+			{
+				mdebug(LM_MEM, "preMemory(%p, size=%u) is allocated.", (void*)(pBlock+1), size);  
+			}
 			return (void*)(pBlock+1);
 		}
 	}
@@ -243,7 +258,7 @@ void* osPreMem_get(uint32_t size)
 }
 
 
-void osPreMem_release(void* ptr)
+static void osPreMem_release(void* ptr, bool isPrintDebug)
 {
 	if(!ptr)
 	{
@@ -311,8 +326,12 @@ void osPreMem_release(void* ptr)
     pthread_mutex_lock(&iallocMutex);
     --totalUsedCount;
     pthread_mutex_unlock(&iallocMutex);
-
 #endif
+
+	if(isPrintDebug)
+	{	
+		mdebug(LM_MEM, "preMemory(%p) is deallocated.", ptr);
+	}
 }
 
 
@@ -426,23 +445,23 @@ void osPreMem_stat()
     int count, n=0;
     char printBuf[(OS_PREMEM_MAX_IDX+2)*48]={};
 
-	n += sprintf(&printBuf[n], "%s", "  i    size  available  unavailable    peak\n");
+	n += sprintf(&printBuf[n], "%s", "  i     size  available  unavailable    peak\n");
 
     for(int i=0; i<OS_PREMEM_MAX_IDX; i++)
     {
         count = osPreMem_getCount(i, true);
 #ifdef PREMEM_DEBUG
-        n += sprintf(&printBuf[n], "%3d  %6d  %9d  %11d%8d\n", i, osPreMemSize[i], count,  osPreMemNum[i]-count, osPreMemUnused[i].peakCount);
+        n += sprintf(&printBuf[n], "%3d  %7d  %9d  %11d%8d\n", i, osPreMemSize[i], count,  osPreMemNum[i]-count, osPreMemUnused[i].peakCount);
 #else
-        n += sprintf(&printBuf[n], "%3d  %6d  %9d  %11d\n", i, osPreMemSize[i], count,  osPreMemNum[i]-count);
+        n += sprintf(&printBuf[n], "%3d  %7d  %9d  %11d\n", i, osPreMemSize[i], count,  osPreMemNum[i]-count);
 #endif
     }
 	
 	count = osPreMem_getCount(OS_PREMEM_MAX_IDX, true);
 #ifdef PREMEM_DEBUG
-    sprintf(&printBuf[n], "Mutex Pool:  %9d  %11d%8d\n", count,  osPreMemNum[OS_PREMEM_MAX_IDX]-count, osPreMemUnused[OS_PREMEM_MAX_IDX].peakCount);
+    sprintf(&printBuf[n], "Mutex Pool:  %10d  %11d%8d\n", count,  osPreMemNum[OS_PREMEM_MAX_IDX]-count, osPreMemUnused[OS_PREMEM_MAX_IDX].peakCount);
 #else
-	sprintf(&printBuf[n], "Mutex Pool:  %9d  %11d\n", count,  osPreMemNum[OS_PREMEM_MAX_IDX]-count);
+	sprintf(&printBuf[n], "Mutex Pool:  %10d  %11d\n", count,  osPreMemNum[OS_PREMEM_MAX_IDX]-count);
 #endif
     logInfo("osPreMem statistics:\n%s\n", printBuf);
 }
@@ -629,12 +648,11 @@ void osPreMem_usedInfo(int idx)
 }
 
 
-
-void* osPreMem_alloc(size_t size, osPreMemFree_h dh, bool isNeedMutex)
+static void* osPreMem_alloc_internal(size_t size, osPreMemFree_h dh, bool isNeedMutex, bool isPrintDebug)
 {
 	void* pMem;
 
-    pMem = osPreMem_get(size);
+    pMem = osPreMem_get(size, isPrintDebug);
     if (!pMem)
     {
         return NULL;
@@ -650,7 +668,7 @@ void* osPreMem_alloc(size_t size, osPreMemFree_h dh, bool isNeedMutex)
 		if(!ptr->pMutex)
 		{
 			logError("fails to osPreMem_getMutex.");
-			osPreMem_release(pMem);
+			osPreMem_release(pMem, isPrintDebug);
 			pMem = NULL;
 		}
 	}
@@ -663,10 +681,36 @@ void* osPreMem_alloc(size_t size, osPreMemFree_h dh, bool isNeedMutex)
 }
 
 
+void* osPreMem_alloc(size_t size, osPreMemFree_h dh, bool isNeedMutex)
+{
+	return osPreMem_alloc_internal(size, dh, isNeedMutex, true);
+}
+
+
+void* osPreMem_alloc1(size_t size, osPreMemFree_h dh, bool isNeedMutex)
+{
+    return osPreMem_alloc_internal(size, dh, isNeedMutex, false);
+}
+
+
 /*allocate a osMemory block, initiates the block with the src content, the new object's nrefs is initiated to 1. */
 void* osPreMem_dalloc(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex)
 {
     void* pMem = osPreMem_alloc(size, dh, isNeedMutex);
+    if (!pMem)
+    {
+        return NULL;
+    }
+
+    memcpy(pMem, src, size);
+
+    return pMem;
+}
+
+
+void* osPreMem_dalloc1(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex)
+{
+    void* pMem = osPreMem_alloc1(size, dh, isNeedMutex);
     if (!pMem)
     {
         return NULL;
@@ -693,50 +737,70 @@ void* osPreMem_zalloc(size_t size, osPreMemFree_h dh, bool isNeedMutex)
 }
 
 
-//pData is the data part of osPreMem data structure
-//only allow realloc to a data that has one reference
-void* osPreMem_realloc(void* pData, size_t size)
+void* osPreMem_zalloc1(size_t size, osPreMemFree_h dh, bool isNeedMutex)
 {
-    osPreMemBlockHdr_t *ptr1, *ptr2;
+    void* ptr = osPreMem_alloc1(size, dh, isNeedMutex);
+    if (!ptr)
+    {
+        return NULL;
+    }
+
+    memset(ptr, 0, size);
+
+    return ptr;
+}
+
+
+
+//pData is the data part of osPreMem data structure
+//dHandler and whether require mutex inherent from pData
+static void* osPreMem_realloc_internal(void* pData, size_t size, bool isPrintDebug)
+{
+	void* pMem = NULL;
 
     if (!pData)
     {
         return NULL;
     }
 
-    ptr1 = ((osPreMemBlockHdr_t*)pData) - 1;
+	if(size > 0)
+	{	
+    	osPreMemBlockHdr_t* ptr = ((osPreMemBlockHdr_t *)pData) - 1;
+    	osPreMemFree_h dh = ptr->dHandler;
+		bool isNeedMutex = ptr->pMutex ? true : false;
 
-	ptr1->pMutex ? pthread_mutex_lock(ptr1->pMutex) : (void)0;
-
-	//not allow a data block having more than 1 reference to do realloc, as otherwise the data pointer that referred by other thread is useless
-	if(ptr1->nrefs > 1)
-	{
-		ptr1->pMutex ? pthread_mutex_unlock(ptr1->pMutex) : (void)0;
-		return NULL;
+		if(isPrintDebug)
+		{
+    		pMem = osPreMem_dalloc(pData, size, dh, isNeedMutex);
+		}
+		else
+		{
+            pMem = osPreMem_dalloc1(pData, size, dh, isNeedMutex);
+		}
 	}
 
-	ptr1->nrefs = 0;
-
-	ptr1->pMutex ? pthread_mutex_unlock(ptr1->pMutex) : (void)0;
-
-	void* pMem = osPreMem_dalloc(pData, size, NULL, false);
-	if(!pMem)
+	if(isPrintDebug)
 	{
-		logError("fails to osPreMem_dalloc.");
-		return NULL;
+		osPreMem_free(pData);
 	}
-
-	//use the same mutexs as the original data	
-	ptr2 = ((osPreMemBlockHdr_t*)pMem) - 1;
-	ptr2->nrefs = 1;
-	ptr2->dHandler = ptr1->dHandler;
-	ptr2->pMutex = ptr1->pMutex;
-
-	ptr1->pMutex = NULL;
-	ptr1->nrefs = 0;
-	osPreMem_release(pData);	
+	else
+	{
+        osPreMem_free1(pData);
+    }
 
     return pMem;
+}
+
+
+void* osPreMem_realloc(void* pData, size_t size)
+{
+	return osPreMem_realloc_internal(pData, size, true);
+}
+
+
+void* osPreMem_realloc1(void* pData, size_t size)
+{
+    return osPreMem_realloc_internal(pData, size, false);
 }
 
 
@@ -769,7 +833,7 @@ void* osPreMem_ref(void *pData)
 }
 
 
-void* osPreMem_free(void *pData)
+static void* osPreMem_free_internal(void *pData, bool isPrintDebug)
 {
     if (!pData)
     {
@@ -779,6 +843,13 @@ void* osPreMem_free(void *pData)
     osPreMemBlockHdr_t* ptr = ((osPreMemBlockHdr_t *)pData) - 1;
 
     ptr->pMutex ? pthread_mutex_lock(ptr->pMutex) : (void)0;
+
+	if(ptr->nrefs == 0)
+	{
+		logError("try to free a memory(%p) that has nrefs=0.", pData);
+        ptr->pMutex ? pthread_mutex_unlock(ptr->pMutex) : (void)0;
+		return NULL;
+	}
 
     if (--ptr->nrefs == 0)
     {
@@ -793,7 +864,7 @@ void* osPreMem_free(void *pData)
     		ptr->pMutex ? pthread_mutex_unlock(ptr->pMutex) : (void)0;
 			osPreMem_mutexRelease(ptr->pMutex);
 
-            osPreMem_release(pData);
+            osPreMem_release(pData, isPrintDebug);
 
             return NULL;
         }
@@ -805,10 +876,62 @@ void* osPreMem_free(void *pData)
 }
 
 
-#ifdef PREMEM_DEBUG
-void* osPreMem_allocDebug(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line)
+void* osPreMem_free(void *pData)
 {
-	void* pMem = osPreMem_alloc(size, dh, isNeedMutex);
+	return osPreMem_free_internal(pData, true);
+}
+
+
+void* osPreMem_free1(void *pData)
+{
+    return osPreMem_free_internal(pData, false);
+}
+
+
+uint32_t osPreMem_getnrefs(void* pData)
+{
+    if (!pData)
+    {
+        return 0;
+    }
+
+	uint32_t nrefs = 0;
+    osPreMemBlockHdr_t* ptr = ((osPreMemBlockHdr_t *)pData) - 1;
+
+    ptr->pMutex ? pthread_mutex_lock(ptr->pMutex) : (void)0;
+
+	nrefs = ptr->nrefs;
+	
+    ptr->pMutex ? pthread_mutex_unlock(ptr->pMutex) : (void)0;
+
+	return nrefs;
+}
+
+
+bool osPreMem_isNeedMutex(void* pData)
+{
+	if(!pData)
+	{
+		return false;
+	}
+
+    osPreMemBlockHdr_t* ptr = ((osPreMemBlockHdr_t *)pData) - 1;
+	return ptr->pMutex ? true : false;
+}
+
+
+#ifdef PREMEM_DEBUG
+static void* osPreMem_allocDebug_internal(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line, bool isPrintDebug)
+{
+	void* pMem = NULL;
+	if(isPrintDebug)
+	{
+		pMem = osPreMem_alloc(size, dh, isNeedMutex);
+	}
+	else
+	{
+		pMem = osPreMem_alloc1(size, dh, isNeedMutex);
+    }
 	if(!pMem)
 	{
 		return NULL;
@@ -850,7 +973,19 @@ void* osPreMem_allocDebug(size_t size, osPreMemFree_h dh, bool isNeedMutex, char
 }
 
 
-void* osPreMem_dallocDebug(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line)
+void* osPreMem_allocDebug(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line)
+{
+	return osPreMem_allocDebug_internal(size, dh, isNeedMutex, file, func, line, true);
+}
+
+
+void* osPreMem_allocDebug1(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line)
+{
+    return osPreMem_allocDebug_internal(size, dh, isNeedMutex, file, func, line, false);
+}
+
+
+static void* osPreMem_dallocDebug_internal(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line, bool isPrintDebug)
 {
     void* pMem = osPreMem_allocDebug(size, dh, isNeedMutex, file, func, line);
     if (!pMem)
@@ -864,7 +999,19 @@ void* osPreMem_dallocDebug(const void* src, size_t size, osPreMemFree_h dh, bool
 }
 
 
-void* osPreMem_zallocDebug(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line)
+void* osPreMem_dallocDebug(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line)
+{
+	return osPreMem_dallocDebug_internal(src, size, dh, isNeedMutex, file, func, line, true);
+}
+
+
+void* osPreMem_dallocDebug1(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line)
+{
+    return osPreMem_dallocDebug_internal(src, size, dh, isNeedMutex, file, func, line, false);
+}
+
+
+static void* osPreMem_zallocDebug_internal(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line, bool isPrintDebug)
 {
     void* ptr = osPreMem_allocDebug(size, dh, isNeedMutex, file, func, line);
     if (!ptr)
@@ -875,5 +1022,55 @@ void* osPreMem_zallocDebug(size_t size, osPreMemFree_h dh, bool isNeedMutex, cha
     memset(ptr, 0, size);
 
     return ptr;
-} 
+}
+
+
+void* osPreMem_zallocDebug(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line)
+{
+	return osPreMem_zallocDebug_internal(size, dh, isNeedMutex, file, func, line, true);
+}
+
+
+void* osPreMem_zallocDebug1(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line)
+{
+    return osPreMem_zallocDebug_internal(size, dh, isNeedMutex, file, func, line, false);
+}
+
+
+static void* osPreMem_reallocDebug_internal(void* pData, size_t size, char* file, const char* func, int line, bool isPrintDebug)
+{
+    void* pMem = NULL;
+
+    if (!pData)
+    {
+        return NULL;
+    }
+
+    if(size > 0)
+    {
+        osPreMemBlockHdr_t* ptr = ((osPreMemBlockHdr_t *)pData) - 1;
+        osPreMemFree_h dh = ptr->dHandler;
+        bool isNeedMutex = ptr->pMutex ? true : false;
+
+        pMem = osPreMem_dallocDebug(pData, size, dh, isNeedMutex, file, func, line);
+    }
+
+    osPreMem_free(pData);
+
+    return pMem;
+}
+
+
+void* osPreMem_reallocDebug(void* pData, size_t size, char* file, const char* func, int line)
+{
+	return osPreMem_reallocDebug_internal(pData, size, file, func, line, true);
+}
+
+
+void* osPreMem_reallocDebug1(void* pData, size_t size, char* file, const char* func, int line)
+{
+    return osPreMem_reallocDebug_internal(pData, size, file, func, line, false);
+}
+
+
 #endif

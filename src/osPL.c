@@ -403,7 +403,7 @@ int osPL_strdup(char **dst, const osPointerLen_t *src)
 		return EINVAL;
 	}
 
-	p = osMem_alloc(src->l+1, NULL);
+	p = osmalloc_r(src->l+1, NULL);
 	if (!p)
 	{
 		return ENOMEM;
@@ -435,7 +435,7 @@ int osDPL_dup(osDPointerLen_t *dst, const osPointerLen_t *src)
 		return EINVAL;
 	}
 
-	p = osMem_alloc(src->l, NULL);
+	p = osmalloc_r(src->l, NULL);
 	if (!p)
 	{
 		return ENOMEM;
@@ -596,20 +596,6 @@ osPointerLen_t osPL_clone(const osPointerLen_t* pl)
 }
 
 
-#if 0
-osPointerLen_t osPL_cloneRef(const osPointerLen_t* pl)
-{
-    osPointerLen_t clonePL;
-
-    clonePL.p = pl->p;
-    clonePL.l = pl->l;
-
-    osMem_ref((void*)pl->p);	
-
-    return clonePL;
-}
-#endif
-
 /**
  * Locate character in pointer-length string
  *
@@ -730,7 +716,7 @@ void osDPL_dealloc(osDPointerLen_t* pl)
 
     if(pl->p && pl->l)
     {
-        osMem_deref((void*) pl->p);
+        pl->p = osfree((void*) pl->p);
         pl->l=0;
     }
 }

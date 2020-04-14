@@ -54,7 +54,7 @@ int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeou
 
 	writeFd = localWriteFd;
 	onTimeout = callBackFunc;
-	pTimerChain = (osTimerChainNode_t*) osmalloc(sizeof(osTimerChainNode_t), NULL);
+	pTimerChain = (osTimerChainNode_t*) osmalloc1(sizeof(osTimerChainNode_t), NULL);
 	
 	pTimerChain->nodeTimeSec = 0;
 	pTimerChain->nodeId = 1;
@@ -63,7 +63,7 @@ int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeou
 
 	osIPCMsg_t ipcMsg;
 	ipcMsg.interface = OS_TIMER_ALL;	
-	osTimerModuleMsg_t* pMsg = (osTimerModuleMsg_t*) osmalloc(sizeof(osTimerModuleMsg_t), NULL);
+	osTimerModuleMsg_t* pMsg = (osTimerModuleMsg_t*) osmalloc1(sizeof(osTimerModuleMsg_t), NULL);
 	pMsg->msgType = OS_TIMER_MODULE_REG;
 	pMsg->clientPipeId = remoteWriteFd;
 	pMsg->timeoutMultiple = timeoutMultiple;
@@ -122,7 +122,7 @@ int osTimerGetMsg(osInterface_e intf, void* pMsg)
 				status = -1;
 			}
 
-		    osfree(pMsg);
+		    osfree1(pMsg);
 			break;
 		}
 		case OS_TIMER_TICK:
@@ -214,7 +214,7 @@ static uint64_t osStartTimerInternal(time_t msec, timeoutCallBackFunc_t callback
 		logError("to-remove, isTimerReady=%d", isTimerReady);
 		if(isTick)
 		{
-			tickInfo_t* pTickInfo = osMem_alloc(sizeof(tickInfo_t), NULL);
+			tickInfo_t* pTickInfo = osmalloc1(sizeof(tickInfo_t), NULL);
 			if(!pTickInfo)
 			{
 				logError("fails to allocate memory for pTickInfo, size(%ld).", sizeof(tickInfo_t));
@@ -263,7 +263,7 @@ static uint64_t osStartTimerInternal(time_t msec, timeoutCallBackFunc_t callback
     time_t diffMsec = (tp.tv_sec - pNewNode->nodeTimeSec)*1000 + msec + tp.tv_nsec/1000000;
 	if(pTimerInfo == NULL)
 	{
-    	pTimerInfo = osmalloc(sizeof(osTimerInfo_t), NULL);
+    	pTimerInfo = osmalloc1(sizeof(osTimerInfo_t), NULL);
     
 		pTimerInfo->pData = pData;
     	pTimerInfo->callback = callback;
@@ -313,7 +313,7 @@ static void osTimerExpireInternal(timeoutCallBackFunc_t callback, uint64_t timer
 
 	if(pTimerInfo->nextTimeout == 0)
 	{
-		osfree(pTimerInfo);
+		osfree1(pTimerInfo);
 	}
 }
 	
@@ -381,7 +381,7 @@ static int osTimerTickExpire()
 	else if (pNewNode != pTimerChain)
 	{
 		//free the current timerChainNode
-		osfree(pTimerChain);
+		osfree1(pTimerChain);
 		pTimerChain = pNewNode;
 		mdebug(LM_TIMER, "move to the new timerNode(%p, nodeTimeSec=%ld, nodeId=%d)", pNewNode, pNewNode->nodeTimeSec, pNewNode->nodeId);
 		
@@ -439,8 +439,8 @@ static int osChainStopTimerFreeTimerEvent(osTimerChainNode_t* pCurNode, uint64_t
 		//a matching timerId found
 		if(timerId  == pTimerEvent->timerId)
 		{
-//			osfree(pTimerEvent->pUserData);
-//			osfree(pTimerEvent);
+//			osfree1(pTimerEvent->pUserData);
+//			osfree1(pTimerEvent);
 			pTimerEventPrev->pNext = pTimerEventNext;
 			
 			//if the removed event is the only event, free the subNode
@@ -454,7 +454,7 @@ static int osChainStopTimerFreeTimerEvent(osTimerChainNode_t* pCurNode, uint64_t
 				{
 					pPrevNode->pNext = pNode->pNext;
 				}
-				osfree(pNode);	
+				osfree1(pNode);	
 			}
 			else
 			{
@@ -471,9 +471,9 @@ static int osChainStopTimerFreeTimerEvent(osTimerChainNode_t* pCurNode, uint64_t
 			}
 			else
 			{
-            	osfree(pTimerEvent->pUserData);
+            	osfree1(pTimerEvent->pUserData);
 			}
-            osfree(pTimerEvent);
+            osfree1(pTimerEvent);
 			return 0;
 		}
 
@@ -530,15 +530,16 @@ static osTimerChainNode_t* osChainFreeSubChainTimerEvents(osTimerChainNode_t* pC
 				//onTimeout(pTimerEvent->timerId, ((osTimerInfo_t*)pTimerEvent->pUserData)->pData);
 			}
 
-			//osfree(pTimerEvent->pUserData);
-			osfree(pTimerEvent);
+			//use osfree1 to hide the memory dealloc info
+			osfree1(pTimerEvent);
 			
 			pTimerEvent = pTimerEventNext;
 		}
 	
 		pCurNode->pTimerSubChain = pNode->pNext;
 		nodeId = pNode->nodeId;
-		osfree(pNode);
+		//use osfree1 to hide the memory dealloc info
+		osfree1(pNode);
 		pNode = pCurNode->pTimerSubChain;
 
     	osTimerListSubChainNodes(NULL);
@@ -620,7 +621,7 @@ static osTimerChainNode_t* osTimerFindChainNode(osTimerChainNode_t* pCurNode, in
 		{
 			if (isForceInsert)
 			{
-				osTimerChainNode_t* pChainNode = (osTimerChainNode_t*) osmalloc(sizeof(osTimerChainNode_t), NULL);
+				osTimerChainNode_t* pChainNode = (osTimerChainNode_t*) osmalloc1(sizeof(osTimerChainNode_t), NULL);
 				if(pChainNode == NULL)
 				{
 					perror("could not allocate pChainNode");
@@ -645,7 +646,7 @@ static osTimerChainNode_t* osTimerFindChainNode(osTimerChainNode_t* pCurNode, in
 	// if we are here, we are at the end of the chain list
 	if(pNode == NULL && isForceInsert)
 	{
-		osTimerChainNode_t* pChainNode = (osTimerChainNode_t*) osmalloc(sizeof(osTimerChainNode_t), NULL);
+		osTimerChainNode_t* pChainNode = (osTimerChainNode_t*) osmalloc1(sizeof(osTimerChainNode_t), NULL);
 		if(pChainNode == NULL)
 		{
 			perror("could not allocate pChainNode");
@@ -727,7 +728,7 @@ static osTimerSubChainNode_t* osTimerFindSubChainNode(osTimerChainNode_t* pChain
 		{
 			if (isForceInsert)
 			{
-				osTimerSubChainNode_t* pSubChainNode = (osTimerSubChainNode_t*) osmalloc(sizeof(osTimerSubChainNode_t), NULL);
+				osTimerSubChainNode_t* pSubChainNode = (osTimerSubChainNode_t*) osmalloc1(sizeof(osTimerSubChainNode_t), NULL);
 				if(pSubChainNode == NULL)
 				{
 					logError("could not allocate pSubChainNode");
@@ -761,7 +762,8 @@ static osTimerSubChainNode_t* osTimerFindSubChainNode(osTimerChainNode_t* pChain
 	// if we are here, we are at the end of the chain list
 	if (pNode == NULL && isForceInsert)
 	{
-		osTimerSubChainNode_t* pSubChainNode = (osTimerSubChainNode_t*) osmalloc(sizeof(osTimerSubChainNode_t), NULL);
+		//use osmalloc1 to not print out the memory alloc info
+		osTimerSubChainNode_t* pSubChainNode = (osTimerSubChainNode_t*) osmalloc1(sizeof(osTimerSubChainNode_t), NULL);
 		if(pSubChainNode == NULL)
 		{
 			logError("could not allocate pSubChainNode");
@@ -798,8 +800,9 @@ static osTimertEvent_t* osTimerEventCreate(osTimerChainNode_t* pChainNode, osTim
 	{
 		return NULL;
 	}
-	
-	osTimertEvent_t* pTimerEvent = (osTimertEvent_t*) osmalloc(sizeof(osTimertEvent_t), NULL);
+
+	//use osmalloc1 to hide the memory alloc info	
+	osTimertEvent_t* pTimerEvent = (osTimertEvent_t*) osmalloc1(sizeof(osTimertEvent_t), NULL);
 	if(pTimerEvent == NULL)
 	{
 		perror("could not allocate pTimerEvent");

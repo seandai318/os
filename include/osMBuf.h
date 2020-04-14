@@ -48,7 +48,10 @@ typedef struct osMBuf {
 //struct osPointerLen;
 //struct osPrintf;
 
+//function with _r are meant for simultaneous access by multiple threads
+
 osMBuf_t *osMBuf_alloc(size_t size);
+osMBuf_t *osMBuf_alloc_r(size_t size);
 osMBuf_t *osMBuf_allocRef(osMBuf_t *mbr);
 //pDupMBuf's initial pos =newPos
 void osMBuf_allocRef1(osMBuf_t* pDupMBuf, osMBuf_t* pOrigMBuf, size_t newPos, size_t len);

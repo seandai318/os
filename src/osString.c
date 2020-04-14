@@ -104,7 +104,7 @@ int osStrDup(char **dst, const char *src)
 
 	sz = strlen(src) + 1;
 
-	p = osMem_alloc(sz, NULL);
+	p = osmalloc_r(sz, NULL);
 	if (!p)
 	{
 		return ENOMEM;

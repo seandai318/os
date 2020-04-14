@@ -37,19 +37,35 @@
 typedef void (*osPreMemFree_h)(void *data);
 
 
+//function name ending with 1 does not print memory alloc/dealloc debug info
 void* osPreMem_alloc(size_t size, osPreMemFree_h dh, bool isNeedMutex);
 void* osPreMem_dalloc(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex);
 void* osPreMem_zalloc(size_t size, osPreMemFree_h dh, bool isNeedMutex);
+void* osPreMem_realloc(void* pData, size_t size);
+void* osPreMem_alloc1(size_t size, osPreMemFree_h dh, bool isNeedMutex);
+void* osPreMem_dalloc1(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex);
+void* osPreMem_zalloc1(size_t size, osPreMemFree_h dh, bool isNeedMutex);
+void* osPreMem_realloc1(void* pData, size_t size);
+void* osPreMem_free(void *pData);
+#ifdef PREMEM_DEBUG
 void* osPreMem_allocDebug(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line);
 void* osPreMem_dallocDebug(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line);
 void* osPreMem_zallocDebug(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line);
-void* osPreMem_realloc(void* pData, size_t size);
+void* osPreMem_reallocDebug(void* pData, size_t size, char* file, const char* func, int line);
+void* osPreMem_allocDebug1(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line);
+void* osPreMem_dallocDebug1(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line);
+void* osPreMem_zallocDebug1(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line);
+void* osPreMem_reallocDebug1(void* pData, size_t size, char* file, const char* func, int line);
+void* osPreMem_free1(void *pData);
+#endif
+
 void* osPreMem_ref(void *pData);
-void* osPreMem_free(void *pData);
+uint32_t osPreMem_getnrefs(void* pData);
+bool osPreMem_isNeedMutex(void* pData);
 
 void osPreMem_init();
-void* osPreMem_get(uint32_t size);
-void osPreMem_release(void* ptr);
+//void* osPreMem_get(uint32_t size);
+//void osPreMem_release(void* ptr);
 //idx: specify which size block to count.  isUnusedCount = true, count for unallocated blocks, =false, count for used blocks
 int osPreMem_getCount(uint8_t idx, bool isUnusedCount);
 void osPreMem_stat();
