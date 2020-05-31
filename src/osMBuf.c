@@ -19,6 +19,7 @@ static osMBuf_t* osMBuf_allocInternal(size_t size, bool isNeedMutex);
 static osMBuf_t *osMBuf_allocRefInternal(osMBuf_t *mbr, bool isNeedMutex);
 
 
+
 static void osMBuf_destructor(void *data)
 {
 	osMBuf_t *mb = data;

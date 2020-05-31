@@ -35,6 +35,13 @@ typedef struct osDPointerLen {
 } osDPointerLen_t;
 
 
+
+typedef struct osVPointerLen {
+	osPointerLen_t pl;
+	bool isPDynamic;	//if isPDynamic = true, pl.p is dynamic allocated, after using the data structure, pl.p shall be freed
+} osVPointerLen_t;
+
+
 /** Initialise a pointer-length object from a constant string literal, like "this is test" or a NULL terminated string. */
 #define osPL(s) {(s), strlen((s))-1}
 

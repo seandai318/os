@@ -64,6 +64,8 @@ typedef bool (*osListSortHandler)(osListElement_t *le1, osListElement_t *le2, vo
 
 
 void osList_init(osList_t *list);
+//besides cleanup pList data structure, delete pList itself
+void osList_free(osList_t* pList);
 //delete the osList_t overhead plus deref the data
 void osList_delete(osList_t *list);
 //to to used when a list object is created via dynamic memory allocation, as a cleanup function for osfree.
@@ -71,6 +73,7 @@ void osList_cleanup(void* pData);
 //only delete the osList_t, data is not touched
 void osList_clear(osList_t *list);
 osListElement_t* osList_append(osList_t *list, void *data);
+//if data==NULL, assume data has already appached to the element
 void osList_appendLE(osList_t *list, osListElement_t *le, void *data);
 osListElement_t* osList_prepend(osList_t *list, void *data);
 void osList_prependLE(osList_t *list, osListElement_t *le, void *data);
@@ -89,7 +92,9 @@ osListElement_t* osList_getHead(const osList_t *list);
 osListElement_t* osList_getTail(const osList_t *list);
 uint32_t osList_getCount(const osList_t *list);
 osStatus_e osList_addString(osList_t *pList, char* nameParam, size_t nameLen);
+osListElement_t* osList_getNextElement(osListElement_t* pLE);
 
+void osListPlus_init(osListPlus_t* pList);
 osStatus_e osListPlus_append(osListPlus_t* pList, void* pData);
 void osListPlus_clear(osListPlus_t* pList);
 void osListPlus_delete(osListPlus_t* pList);

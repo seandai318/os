@@ -62,6 +62,19 @@ logError("to-remove, delete, addr=%p, total element=%d", pList, osList_getCount(
 }
 
 
+//besides cleanup pList data structure, delete pList itself
+void osList_free(osList_t* pList)
+{
+	if(!pList)
+	{
+		return;
+	}
+
+	osList_delete(pList);
+	osfree(pList);
+}
+
+
 //to to used when a list object is created via dynamic memory allocation, as a cleanup function for osfree.
 void osList_cleanup(void* pData)
 {
@@ -144,7 +157,7 @@ osListElement_t* osList_append(osList_t *list, void *data)
  *
  * @param list  Linked list
  * @param le    List element
- * @param data  Element data
+ * @param data  Element data, if data==NULL, assume data has already appached to the element 
  */
 void osList_appendLE(osList_t* list, osListElement_t *le, void *data)
 {
@@ -159,7 +172,10 @@ void osList_appendLE(osList_t* list, osListElement_t *le, void *data)
     le->prev = list->tail;
     le->next = NULL;
     le->list = list;
-    le->data = data;
+	if(data)
+	{
+    	le->data = data;
+	}
 
     if (!list->head)
         list->head = le;
@@ -638,6 +654,20 @@ void osList_orderAppend(osList_t *list, osListSortHandler sortHandler, void* dat
 }
 
 
+
+void osListPlus_init(osListPlus_t* pList)
+{
+	if(!pList)
+	{
+		return;
+	}
+
+	pList->num = 0;
+	pList->first = NULL;
+	osList_init(&pList->more);
+}
+
+
 osStatus_e osListPlus_append(osListPlus_t* pList, void* pData)
 {
 	osStatus_e status = OS_STATUS_OK;
@@ -696,4 +726,26 @@ void osListPlus_delete(osListPlus_t* pList)
 	osList_delete(&pList->more);
 	pList->first = NULL;
 }
-		
+	
+
+//get next element from the list.  if already the last one, starts from the head
+osListElement_t* osList_getNextElement(osListElement_t* pLE)
+{
+	osListElement_t* pNextLE = pLE;
+	if(!pLE)
+	{
+		goto EXIT;
+	}
+
+	if(pLE->next)
+	{
+		pNextLE = pLE->next;
+	}
+	else
+	{
+		pNextLE = pLE->list->head;
+	}
+
+EXIT:
+	return pNextLE;
+}	

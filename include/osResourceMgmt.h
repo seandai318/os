@@ -19,6 +19,7 @@ typedef enum osInterface {
 	OS_GTPu,
 	OS_SIP_TRANSPORT_LBINFO,
 	OS_SIP_TRANSPORT_SERVER,
+	OS_DIA_TRANSPORT,
 	OS_TIMER_TICK,			//to notify timer tick expires
 	OS_TIMER_ALL = 100,		//for timer register
 } osInterface_e;

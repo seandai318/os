@@ -176,7 +176,8 @@ uint64_t osRestartTimer(uint64_t timerId)
 	return osStartTimerInternal(pTimerInfo->restartTimeout, NULL, NULL, pTimerInfo, false);
 }	
 	
-	
+
+//always return 0	
 int osStopTimer(uint64_t timerId)
 {
 	if(timerId == 0 || pTimerChain->nodeTimeSec ==0)
@@ -188,7 +189,7 @@ int osStopTimer(uint64_t timerId)
 	mlogInfo(LM_TIMER, "stop timerId=0x%lx, %s", timerId, ret == 0 ? "successful" : "failed");
     osTimerListSubChainNodes(NULL);
 
-	return ret;
+	return 0;
 }
 
 

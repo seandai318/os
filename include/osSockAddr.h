@@ -1,12 +1,12 @@
 /**
- * @file osSocketAddr.h  Interface to Socket Address
+ * @file osSockAddr.h  Interface to Socket Address
  *
  * Copyright (C) 2019 InterLogic
  */
 
 
-#ifndef OS_SOCKET_ADDR_H
-#define OS_SOCKET_ADDR_H
+#ifndef OS_SOCK_ADDR_H
+#define OS_SOCK_ADDR_H
 
 
 #include <sys/types.h>
@@ -38,6 +38,21 @@ typedef struct osSocketAddr {
 } osSocketAddr_t;
 
 
+//address family
+typedef enum {
+	OS_AF_IPv4 = 1,
+	OS_AF_IPv6 = 2,
+	OS_AF_PACKET = 9,
+} osAF_e;
+
+
+typedef struct {
+    osPointerLen_t ip;
+    int port;
+	char ipMem[INET_ADDRSTRLEN];	//this must be at the bottom of the data structure, maybe pointed by ip.  be note, ip may also point to a IP filed in a osMBuf_t message.
+} osIpPort_t;
+
+
 void     osSA_init(osSocketAddr_t *sa, int af);
 int      osSA_set(osSocketAddr_t *sa, const osPointerLen_t *addr, uint16_t port);
 int      osSA_setStr(osSocketAddr_t *sa, const char *addr, uint16_t port);
@@ -64,6 +79,8 @@ bool     osSA_isAny(const osSocketAddr_t *sa);
 
 struct osPrintf;
 int      osSA_print_addr(struct osPrintf *pf, const osSocketAddr_t *sa);
-
+osStatus_e osConvertPLton(osIpPort_t* pIpPort, bool isIncludePort, struct sockaddr_in* pSockAddr);
+osStatus_e osConvertntoPL(struct sockaddr_in* pSockAddr, osIpPort_t* pIpPort);
+bool osIsSameSA(struct sockaddr_in* pSockAddr, struct sockaddr_in* pSockAddr1);
 
 #endif

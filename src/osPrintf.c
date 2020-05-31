@@ -12,7 +12,7 @@
 #include "osMemory.h"
 #include "osMBuf.h"
 #include "osPL.h"
-#include "osSocketAddr.h"
+#include "osSockAddr.h"
 
 
 enum length_modifier {
@@ -371,6 +371,19 @@ int osPrintf_onHandler(const char *fmt, va_list ap, osPrintf_h pHandler, void *a
 
                 err |= write_padded(pMbuf ? pMbuf->buf : NULL, (pMbuf && pMbuf->buf) ? pMbuf->end : 0, pad, ' ', plr, NULL, pHandler, arg);
 				break;
+			case 'A':
+			{
+				struct sockaddr_in* pSA = va_arg(ap, struct sockaddr_in*);
+				osIpPort_t osIpPort;
+				osConvertntoPL(pSA, &osIpPort);
+				err |= write_padded(pSA ? osIpPort.ip.p : NULL, pSA ? osIpPort.ip.l : 0, pad, ' ', plr, NULL, pHandler, arg);
+				if(pSA)
+				{
+                	len = local_itoa(num, osIpPort.port, 10, false);
+                	err |= write_padded(num, len, pad, plr ? ' ' : pch, plr, ":", pHandler, arg);
+				}
+				break;
+			}		
 			case 's':
 				str = va_arg(ap, const char *);
 				err |= write_padded(str, osStrLen(str), pad, ' ', plr, NULL, pHandler, arg);
