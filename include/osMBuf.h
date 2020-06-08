@@ -66,6 +66,7 @@ int 	osMBuf_modifyStr(osMBuf_t *mb, char* str, size_t strLen, size_t pos);
 int      osMBuf_writeBuf(osMBuf_t *mb, const uint8_t *buf, size_t size, bool isAdvancePos);
 //copy the srcmb buf between the startPos and stopPos (the characters including startPos until stopPos-1) to destmb.
 int 	osMBuf_writeBufRange(osMBuf_t *destmb, const osMBuf_t *srcmb, size_t startPos, size_t stopPos, bool isAdvancePos);
+int 	osMBuf_setZero(osMBuf_t *mb, size_t size, bool isAdvancePos);
 int      osMBuf_writeU8(osMBuf_t *mb, uint8_t v, bool isAdvancePos);
 int      osMBuf_writeU16(osMBuf_t *mb, uint16_t v, bool isAdvancePos);
 int      osMBuf_writeU32(osMBuf_t *mb, uint32_t v, bool isAdvancePos);

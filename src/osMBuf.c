@@ -420,6 +420,33 @@ int osMBuf_writeBufRange(osMBuf_t *destmb, const osMBuf_t *srcmb, size_t startPo
 }
 
 
+int osMBuf_setZero(osMBuf_t *mb, size_t size, bool isAdvancePos)
+{
+	if(!mb)
+	{
+		return EINVAL;
+	}
+
+	if(size > (mb->size - mb->pos))
+	{
+		return EINVAL;
+	}
+
+	memset(&mb->buf[mb->pos], 0, size);
+    if(isAdvancePos)
+    {
+        mb->pos += size;
+        mb->end  = MAX(mb->end, mb->pos);
+    }
+    else
+    {
+        mb->end  = MAX(mb->end, mb->pos + size);
+    }
+
+	return 0;
+}
+
+
 /**
  * Write an 8-bit value to a memory buffer in the current mbuf position
  *
