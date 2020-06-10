@@ -376,7 +376,7 @@ int osPrintf_onHandler(const char *fmt, va_list ap, osPrintf_h pHandler, void *a
 				struct sockaddr_in* pSA = va_arg(ap, struct sockaddr_in*);
 				osIpPort_t osIpPort;
 				osConvertntoPL(pSA, &osIpPort);
-				err |= write_padded(pSA ? osIpPort.ip.p : NULL, pSA ? osIpPort.ip.l : 0, pad, ' ', plr, NULL, pHandler, arg);
+				err |= write_padded(pSA ? osIpPort.ip.pl.p : NULL, pSA ? osIpPort.ip.pl.l : 0, pad, ' ', plr, NULL, pHandler, arg);
 				if(pSA)
 				{
                 	len = local_itoa(num, osIpPort.port, 10, false);

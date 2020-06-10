@@ -39,6 +39,7 @@ typedef struct osDPointerLen {
 typedef struct osVPointerLen {
 	osPointerLen_t pl;
 	bool isPDynamic;	//if isPDynamic = true, pl.p is dynamic allocated, after using the data structure, pl.p shall be freed
+	bool isVPLDynamic;	//if isVPLDynamic = true, osVPointerLen_t data structure is dynamic allocated, otherwise, static allocated
 } osVPointerLen_t;
 
 
@@ -81,6 +82,11 @@ void osPL_trimLWS(osPointerLen_t* pl, bool isTrimTop, bool isTrimBottom);
 void osPL_split(osPointerLen_t* srcPL, char splitter, osPointerLen_t* sub1, osPointerLen_t* sub2);
 
 void osDPL_dealloc(osDPointerLen_t *pl);
+
+void osVPL_init(osVPointerLen_t* pl, bool isVPLDynamic);
+void osVPL_set(osVPointerLen_t* pl, void* p, size_t l, bool isPDynamic);
+void osVPL_setStr(osVPointerLen_t *pl, const char *str, size_t len, bool isPDynamic);
+void osVPL_free(osVPointerLen_t* pl);
 
 /** Advance pl position/length by +/- N bytes */
 static inline void osPL_advance(osPointerLen_t *pl, ssize_t n)

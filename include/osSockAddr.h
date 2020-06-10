@@ -47,7 +47,7 @@ typedef enum {
 
 
 typedef struct {
-    osPointerLen_t ip;
+    osVPointerLen_t ip;
     int port;
 	char ipMem[INET_ADDRSTRLEN];	//this must be at the bottom of the data structure, maybe pointed by ip.  be note, ip may also point to a IP filed in a osMBuf_t message.
 } osIpPort_t;

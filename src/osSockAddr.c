@@ -20,9 +20,9 @@ osStatus_e osConvertPLton(osIpPort_t* pIpPort, bool isIncludePort, struct sockad
         pSockAddr->sin_port = 0;
     }
 
-    if(osPL_strcpy(&pIpPort->ip, ip, INET_ADDRSTRLEN) != 0)
+    if(osPL_strcpy(&pIpPort->ip.pl, ip, INET_ADDRSTRLEN) != 0)
     {
-        logError("fails to perform osPL_strcpy for IP(%r).", pIpPort->ip);
+        logError("fails to perform osPL_strcpy for IP(%r).", &pIpPort->ip.pl);
         status = OS_ERROR_INVALID_VALUE;
         goto EXIT;
     }
@@ -53,8 +53,9 @@ osStatus_e osConvertntoPL(struct sockaddr_in* pSockAddr, osIpPort_t* pIpPort)
 		return OS_ERROR_INVALID_VALUE;
 	}
 
-	pIpPort->ip.p = pIpPort->ipMem;
-	pIpPort->ip.l = strlen(pIpPort->ipMem);
+	pIpPort->ip.pl.p = pIpPort->ipMem;
+	pIpPort->ip.pl.l = strlen(pIpPort->ipMem);
+	pIpPort->ip.isPDynamic = false;
 
 	pIpPort->port = ntohs(pSockAddr->sin_port);
 	

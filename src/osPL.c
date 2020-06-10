@@ -722,6 +722,66 @@ void osDPL_dealloc(osDPointerLen_t* pl)
 }
 
 
+void osVPL_init(osVPointerLen_t* pl, bool isVPLDynamic)
+{
+    if(!pl)
+    {
+        return;
+    }
+    pl->pl.p= NULL;
+    pl->pl.l = 0;
+	pl->isVPLDynamic = isVPLDynamic;
+}
+
+
+void osVPL_set(osVPointerLen_t* pl, void* p, size_t l, bool isPDynamic)
+{
+    if(!pl)
+    {
+        return;
+    }
+
+    pl->pl.p = p;
+    pl->pl.l = l;
+
+	pl->isPDynamic = isPDynamic;
+}
+
+
+void osVPL_setStr(osVPointerLen_t *pl, const char *str, size_t len, bool isPDynamic)
+{
+    if (!pl || !str)
+    {
+        return;
+    }
+
+    pl->pl.p = str;
+    pl->pl.l = !len ? strlen(str) : len;
+
+	pl->isPDynamic = isPDynamic;
+}
+
+
+void osVPL_free(osVPointerLen_t* vpl)
+{
+	if(!vpl)
+	{
+		return;
+	}
+
+	if(vpl->isPDynamic)
+	{
+		osfree((void*) vpl->pl.p);
+		vpl->pl.l = 0;
+	}
+
+	if(vpl->isVPLDynamic)
+	{
+		osfree(vpl);
+	}
+}	
+
+
 //split a string into 2, based on the first match of the splitter
 void osPL_split(osPointerLen_t* srcPL, char splitter, osPointerLen_t* sub1, osPointerLen_t* sub2)
 {
