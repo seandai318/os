@@ -522,6 +522,20 @@ osListElement_t* osList_getHead(const osList_t *list)
 }
 
 
+osListElement_t* osList_popHead(const osList_t *list)
+{
+	if(!list)
+	{
+		return NULL;
+	}
+
+	osListElement_t* pLE = list->head;
+	osList_unlinkElement(pLE);
+
+	return pLE;
+}
+
+
 /**
  * Get the last element in a linked list
  *
@@ -532,6 +546,20 @@ osListElement_t* osList_getHead(const osList_t *list)
 osListElement_t* osList_getTail(const osList_t *list)
 {
 	return list ? list->tail : NULL;
+}
+
+
+osListElement_t* osList_popTail(const osList_t *list)
+{
+    if(!list)
+    {
+        return NULL;
+    }
+
+    osListElement_t* pLE = list->tail;
+    osList_unlinkElement(pLE);
+
+    return pLE;
 }
 
 

@@ -90,6 +90,8 @@ void osList_sort(osList_t *list, osListSortHandler sortHandler, void *arg);
 osListElement_t *osList_lookup(const osList_t *list, bool fwd, osListApply_h applyHandler, void *arg);
 osListElement_t* osList_getHead(const osList_t *list);
 osListElement_t* osList_getTail(const osList_t *list);
+osListElement_t* osList_popHead(const osList_t *list);
+osListElement_t* osList_popTail(const osList_t *list);
 uint32_t osList_getCount(const osList_t *list);
 osStatus_e osList_addString(osList_t *pList, char* nameParam, size_t nameLen);
 osListElement_t* osList_getNextElement(osListElement_t* pLE);
