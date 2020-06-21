@@ -43,7 +43,7 @@ typedef struct osXml_complexTypeInfo {
 } osXmlComplexType_t;
 
 
-typedef struct osXmlElement {
+typedef struct osXsdElement {
 	bool isRootElement;
 	osPointerLen_t elemName;
 	osPointerLen_t elemTypeName;
@@ -59,10 +59,10 @@ typedef struct osXmlElement {
 		osPointerLen_t string;
 		osXmlComplexType_t* pComplex;
 	};
-} osXmlElement_t;
+} osXsdElement_t;
 
 
-osXmlElement_t* osXml_parseXsd(osMBuf_t* pXmlBuf);
+osXsdElement_t* osXml_parseXsd(osMBuf_t* pXmlBuf);
 
 
 #endif

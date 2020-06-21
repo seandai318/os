@@ -18,7 +18,11 @@
 //help data structure for tag and namve-value pair list
 typedef struct {
 	osPointerLen_t tag;
-	osList_t attrNVList;	//each element contains osXmlNameValue_t
+	bool isPElement;				//if the union data is pElement, this value is true
+	union {
+		osList_t attrNVList;		//each list element contains osXmlNameValue_t
+		osXsdElement_t* pElement;	//if tag is xs:element, and contains info other than tag attributes, this data structure will be used
+	};
 } osXmlTagInfo_t;
 
 
@@ -28,7 +32,7 @@ typedef struct osXmlNameValue {
 } osXmlNameValue_t;
 
 
-//for function osXml_getTagInfo()
+//for function osXml_parseTag()
 typedef enum {
     OS_XML_TAG_INFO_START,
     OS_XML_TAG_INFO_BEFORE_TAG_INSIDE_QUOTE,
@@ -43,26 +47,29 @@ typedef enum {
 } osXmlCheckTagInfoState_e;
 
 
-static osStatus_e osXml_elemLinkChild(osXmlElement_t* pParentElem, osList_t* pTypeList);
-static bool osXml_listFoundMatchingType(osListElement_t* pLE, void* typeName);
-static osXmlElement_t* osXml_parseTopTag(osMBuf_t* pXmlBuf, osList_t* pTypeList);
-static osXmlElement_t* osXml_getRootElemInfo(osMBuf_t* pXmlBuf);
-static osXmlComplexType_t* osXml_getComplexTypeInfo(osMBuf_t* pXmlBuf, bool isAdvancePos);
+static osXsdElement_t* osXml_getRootElemInfo(osMBuf_t* pXmlBuf);
+static osStatus_e osXml_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pTypeList);
+static osXsdElement_t* osXml_parseGlobalTags(osMBuf_t* pXmlBuf, osList_t* pTypeList);
+static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool* isTagDone, bool* isEndTag, osXmlTagInfo_t** ppTagInfo);
+static osXsdElement_t* osXmlElement_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pTagInfo);
+static osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement);
+static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagInfo_t* pTagInfo);
+static osXmlComplexType_t* osXmlComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pCtTagInfo, osXsdElement_t* pParentElem);
+static osStatus_e osXmlComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplexType_t* pCtInfo);
+static osStatus_e osXmlComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagInfo_t* pTagInfo);
 static bool osXml_findWhiteSpace(osMBuf_t* pBuf, bool isAdvancePos);
-static osXmlElement_t* osXml_parseTopTag(osMBuf_t* pXmlBuf, osList_t* pTypeList);
-static osStatus_e osXmlComplexType_addTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagInfo_t* pTagInfo);
-static osXmlTagInfo_t* osXml_getTagInfo(osMBuf_t* pBuf, bool isTagNameChecked, bool* isTagDone, bool* isEndTag);
 static osXmlDataType_e osXml_getElementType(osPointerLen_t* pTypeValue);
-static osStatus_e osXml_getElementInfoFromTag(osList_t* pAttrList, osXmlElement_t* pElement);
 static bool osXml_findPattern(osMBuf_t* pXmlBuf, osPointerLen_t* pPattern, bool isAdvancePos);
 
+static bool osXml_listFoundMatchingType(osListElement_t* pLE, void* typeName);
 
 
 
-osXmlElement_t* osXml_parseXsd(osMBuf_t* pXmlBuf)	
+
+osXsdElement_t* osXml_parseXsd(osMBuf_t* pXmlBuf)	
 {
 	
-	osXmlElement_t* pRootElem = NULL;
+	osXsdElement_t* pRootElem = NULL;
 	osList_t typeList = {};
 	
 	if(!pXmlBuf)
@@ -73,7 +80,7 @@ osXmlElement_t* osXml_parseXsd(osMBuf_t* pXmlBuf)
 
 	while(pXmlBuf->pos < pXmlBuf->end)
 	{
-		osXmlElement_t* pElem = osXml_parseTopTag(pXmlBuf, &typeList);
+		osXsdElement_t* pElem = osXml_parseGlobalTags(pXmlBuf, &typeList);
 		if(pElem)
 		{
 			if(pRootElem)
@@ -92,7 +99,7 @@ osXmlElement_t* osXml_parseXsd(osMBuf_t* pXmlBuf)
 
 	if(!pRootElem)
 	{
-		logError("fails to osXml_parseTopTag, pRootElem=NULL.");
+		logError("fails to osXml_parseGlobalTags, pRootElem=NULL.");
 		goto EXIT;
 	}
 
@@ -104,7 +111,7 @@ EXIT:
 }
 
 
-static osStatus_e osXml_elemLinkChild(osXmlElement_t* pParentElem, osList_t* pTypeList)
+static osStatus_e osXml_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pTypeList)
 {
 	osStatus_e status = OS_STATUS_OK;
 
@@ -131,10 +138,10 @@ static osStatus_e osXml_elemLinkChild(osXmlElement_t* pParentElem, osList_t* pTy
 			
 			while((pLE = osList_popHead(&pParentElem->pComplex->elemList)) != NULL)
 			{
-				status = osXml_elemLinkChild((osXmlElement_t*)pLE->data, pTypeList);
+				status = osXml_elemLinkChild((osXsdElement_t*)pLE->data, pTypeList);
 				if(status != OS_STATUS_OK)
 				{
-					logError("fails to osXml_elemLinkChild for (%r).", pLE->data ? &((osXmlElement_t*)pLE->data)->elemName : NULL);
+					logError("fails to osXml_elemLinkChild for (%r).", pLE->data ? &((osXsdElement_t*)pLE->data)->elemName : NULL);
 					goto EXIT;
 				}
 			}
@@ -153,127 +160,81 @@ EXIT:
 }
 
 
-static osXmlElement_t* osXml_parseTopTag(osMBuf_t* pXmlBuf, osList_t* pTypeList)
+//this function parse the root element and complexType
+static osXsdElement_t* osXml_parseGlobalTags(osMBuf_t* pXmlBuf, osList_t* pTypeList)
 {
-	osList_t tagList = {};
-	osXmlElement_t* pRootElement = NULL;
-	
-	if(!pXmlBuf || !pTypeList)
+	osStatus_e status = OS_STATUS_OK;
+    osList_t tagList = {};
+    osXsdElement_t* pRootElement = NULL;
+
+    if(!pXmlBuf)
+    {
+        logError("pXmlBuf=%p.", pXmlBuf);
+        goto EXIT;
+    }
+
+    bool isTagDone = false; //the tag is wrapped in one line, i.e., <tag, tag-content />
+    bool isEndTag = false;  //the line is the end of tag, i.e., </tag>
+
+    //get tag info for the immediate next tag
+    osXmlTagInfo_t* pTagInfo = NULL;
+	status = osXml_parseTag(pXmlBuf, false, &isTagDone, &isEndTag, &pTagInfo);
+    if(status != OS_STATUS_OK)
+    {
+		logError("fails to osXml_parseTag.");
+        goto EXIT;
+    }
+
+	if(!pTagInfo)
 	{
-		logError("pXmlBuf=%p, pTypeList=%p.", pXmlBuf, pTypeList);
+		logInfo("all tags are parsed.");
 		goto EXIT;
 	}
 
-	osPointerLen_t tagOpenSep={"<", 1};
-	if(!osXml_findPattern(pXmlBuf, &tagOpenSep, true))
+	switch(pTagInfo->tag.l)
 	{
-		logError("does not find the '<' to start for a tag.");
-		goto EXIT;
-	}
-
-	//check the following two patterns: "xs:element", "xs:complexType", may include other types later.
-	size_t origPos = pXmlBuf->pos;
-	if(!osXml_findWhiteSpace(pXmlBuf, true))
-	{
-		logError("there is no tag found.")
-		goto EXIT;
-	}
-
-	switch(pXmlBuf->pos - origPos)
-	{
-		case OS_XML_COMPLEXTYPE_LEN:		//len = 14, "xs:complexType"
-		{
-			osPointerLen_t complexType = {"xs:complexType", 14};
-			if(!strncmp(&pXmlBuf->buf[origPos], complexType.p, complexType.l))
+		case OS_XML_COMPLEXTYPE_LEN:        //len = 14, "xs:complexType"
+        {
+			if(pTagInfo->tag.p[3] != 'c' || strncmp("xs:complexType", pTagInfo->tag.p, pTagInfo->tag.l) != 0)
 			{
-				logError("xml format invalid. pos=%ld", pXmlBuf->pos);
-				goto EXIT;
+				logInfo("top tag(%r) len=14, but is not xs:complexType, ignore.", &pTagInfo->tag);
+				break;
 			}
 
-			osXmlComplexType_t* pCtInfo = osXml_getComplexTypeInfo(pXmlBuf, true);
-  			if(!pCtInfo)
+			osXmlComplexType_t* pCtInfo = osXmlComplexType_parse(pXmlBuf, pTagInfo, NULL);
+			if(!pCtInfo || !pCtInfo->typeName.l)
 			{
-				logError("fails to osXml_getComplexTypeInfo (pos=%ld).", pXmlBuf->pos);
-				goto EXIT;
+				logError("global type is NULL or has no typeName, pCtInfo=%p, typeName.l=%ld.", pCtInfo, pCtInfo->typeName.l);
+				status = OS_ERROR_INVALID_VALUE;
+				break;
 			}
- 
-			//now start to parse complex components 
-			osList_t tagList; //help list to parse the tag
-			osList_t tagParseList;  //a list of parsed tag
-    		while(pXmlBuf->pos < pXmlBuf->end)
-    		{
-				bool isTagDone = false;	//the tag is wrapped in one line, i.e., <tag, tag-content />
-				bool isEndTag = false;	//the line is the end of tag, i.e., </tag>
-				osXmlTagInfo_t* pTagInfo = osXml_getTagInfo(pXmlBuf, false, &isTagDone, &isEndTag);
-				if(!pTagInfo)
-				{
-					logError("fails to osXml_getTagInfo.");
-					break;
-				}
-		
-				if(isEndTag)
-				{
-					osListElement_t* pLE = osList_popTail(&tagList);
-					if(!pLE)
-					{
-						//"xs:complexType" was not pushed into tagList, so it is possible the end tag is "xs:complexType"
-						if(strncmp("xs:complexType", ((osXmlTagInfo_t*)pLE->data)->tag.p, ((osXmlTagInfo_t*)pLE->data)->tag.l))
-						{
-							logError("expect the end tag for xs:complexType, but %r is found.", &((osXmlTagInfo_t*)pLE->data)->tag); 
-						}
-						else
-						{
-							osList_append(pTypeList, pCtInfo);
-						}
-						goto EXIT;
-					}
-							
-					//compare the end tag name (newly gotten) and the beginning tag name (from the LE)
-					if(osPL_cmp(&((osXmlTagInfo_t*)pLE->data)->tag, &pTagInfo->tag) == 0)
-					{
-						osXmlComplexType_addTagInfo(pCtInfo, (osXmlTagInfo_t*)pLE->data);
-						continue;
-					}
-					else
-					{
-						logError("input xml is invalid, error in (%r).", &pTagInfo->tag);
-						goto EXIT;
-					}
 
-					if(isTagDone)
-					{
-						//no need to push to the tagList as the end tag is part of the line
-						osXmlComplexType_addTagInfo(pCtInfo, pTagInfo);
-					}
-					else
-					{
-						//add the beginning tag to the tagList, the info in the beginning tag will be processed when the end tag is met
-						osList_append(&tagList, pTagInfo);
-					}
-				}
-			}			
-        	break;
+            //insert the complex type into typeList so that the type can be linked in by elements
+            osList_append(pTypeList, pCtInfo);
+			break;
 		}
-       	case OS_XML_ELEMENT_LEN:            //10, "xs:element"
-		{
-           	pRootElement = osXml_getRootElemInfo(pXmlBuf);
-			if(!pRootElement)
-			{
-				logError("fails to osXml_getRootElemInfo, pos=%ld.", pXmlBuf->pos);
-				goto EXIT;
-			}
-           	break;
-		}
-	}
+		case OS_XML_ELEMENT_LEN:            //10, "xs:element"
+        {
+            pRootElement = osXml_getRootElemInfo(pXmlBuf);
+            if(!pRootElement)
+            {
+                logError("fails to osXml_getRootElemInfo, pos=%ld.", pXmlBuf->pos);
+                goto EXIT;
+            }
+            break;
+        }
+    }
 
 EXIT:
-	return pRootElement;
+    return pRootElement;
 }
 
 
-static osXmlElement_t* osXml_getRootElemInfo(osMBuf_t* pXmlBuf)
+static osXsdElement_t* osXml_getRootElemInfo(osMBuf_t* pXmlBuf)
 {
-	osXmlElement_t* pRootElement = NULL;
+	osStatus_e status = OS_STATUS_OK;
+	osXsdElement_t* pRootElement = NULL;
+	osXmlTagInfo_t* pTagInfo = NULL;
 
     if(!pXmlBuf)
     {
@@ -283,55 +244,48 @@ static osXmlElement_t* osXml_getRootElemInfo(osMBuf_t* pXmlBuf)
 
     bool isTagDone = false; //the tag is wrapped in one line, i.e., <tag, tag-content />
     bool isEndTag = false;  //the line is the end of tag, i.e., </tag>
-    osXmlTagInfo_t* pTagInfo = osXml_getTagInfo(pXmlBuf, true, &isTagDone, &isEndTag);
-    if(!pTagInfo)
+    status = osXml_parseTag(pXmlBuf, true, &isTagDone, &isEndTag, &pTagInfo);
+    if(status != OS_STATUS_OK || !pTagInfo)
     {
-        logError("fails to osXml_getTagInfo.");
+        logError("fails to osXml_parseTag.");
         goto EXIT;
     }
 
-	pRootElement = osmalloc(sizeof(osXmlElement_t), NULL);
-
-	osXml_getElementInfoFromTag(&pTagInfo->attrNVList, pRootElement);
-
-	if(!isTagDone)
+	if(isTagDone)
 	{
-        //isTagDone = true is for <xs:element name="A" type="B" />
-		//cisTagDone = false is for <xs:element name="A" type="B" ><xs:complexType name="C">...</xs:complexType></xs:element>, TO-DO
+		//for <xs:element name="A" type="B" />
+		pRootElement = osmalloc(sizeof(osXsdElement_t), NULL);
+
+		osXmlElement_getAttrInfo(&pTagInfo->attrNVList, pRootElement);
 	}
+	else
+	{
+		//for <xs:element name="A" type="B" ><xs:complexType name="C">...</xs:complexType></xs:element>, TO-DO
+		osXsdElement_t* pElem = osXmlElement_parse(pXmlBuf, pTagInfo);
+        if(!pElem)
+        {
+        	logError("fails to osXmlElement_parse, pos=%ld.", pXmlBuf->pos);
+            goto EXIT;
+        }
+	}
+
 EXIT:
+	osfree(pTagInfo);
 	return pRootElement;
 }
 
 
-static osXmlComplexType_t* osXml_getComplexTypeInfo(osMBuf_t* pXmlBuf, bool isAdvancePos)
+static osStatus_e osXmlComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplexType_t* pCtInfo)
 {
-	osXmlComplexType_t* pCtInfo = NULL;
-
-	if(!pXmlBuf)
-	{
-		logError("null pointer, pCtInfo.");
-		goto EXIT;
-	}
-
-	//get mixed="true", name="HSSType", etc.
-    bool isTagDone = false; //the tag is wrapped in one line, i.e., <tag, tag-content />
-    bool isEndTag = false;  //the line is the end of tag, i.e., </tag>
-    osXmlTagInfo_t* pTagInfo = osXml_getTagInfo(pXmlBuf, true, &isTagDone, &isEndTag);
-    if(!pTagInfo)
+	osStatus_e status = OS_STATUS_OK;
+    if(!pCtInfo || !pAttrList)
     {
-		logError("fails to osXml_getTagInfo.");
+        logError("null pointer, pCtInfo=%p, pAttrList=%p.", pCtInfo, pAttrList);
+        status = OS_ERROR_NULL_POINTER;
         goto EXIT;
     }
 
-	if(isTagDone || isEndTag)
-	{
-		logError("a start complexType tag is either tagDone (<tag, tag-content />) or endTag(</tag>), isTagDone=%d, isEndTag=%d.", isTagDone, isEndTag);
-		goto EXIT;
-	} 
-
-	pCtInfo = osmalloc(sizeof(osXmlComplexType_t), NULL);	
-	osListElement_t* pLE = pTagInfo->attrNVList.head;
+	osListElement_t* pLE = pAttrList->head;
 	while(pLE)
 	{
         osXmlNameValue_t* pNV = pLE->data;
@@ -383,11 +337,11 @@ static osXmlComplexType_t* osXml_getComplexTypeInfo(osMBuf_t* pXmlBuf, bool isAd
 	}
 
 EXIT:
-	return pCtInfo;
+	return status;
 }	
 	
 	
-static osStatus_e osXmlComplexType_addTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagInfo_t* pTagInfo)
+static osStatus_e osXmlComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagInfo_t* pTagInfo)
 {
 	osStatus_e status = OS_STATUS_OK;
 
@@ -419,9 +373,17 @@ static osStatus_e osXmlComplexType_addTagInfo(osXmlComplexType_t* pCtInfo, osXml
 		case 10:		//len=10, "xs:element"
 			if(strncmp("xs:element", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
     		{
-        		osXmlElement_t* pElement = osmalloc(sizeof(osXmlElement_t), NULL);
+				osXsdElement_t* pElement;
+				if(pTagInfo->isPElement)
+				{
+					pElement = pTagInfo->pElement;
+				}
+				else
+				{
+        			pElement = osmalloc(sizeof(osXsdElement_t), NULL);
+        			osXmlElement_getAttrInfo(&pTagInfo->attrNVList, pElement);
+				}
 
-        		osXml_getElementInfoFromTag(&pTagInfo->attrNVList, pElement);
         		osList_append(&pCtInfo->elemList, pElement);
                 isIgnored = false;
     		}
@@ -447,8 +409,213 @@ EXIT:
 }
 
 
+static osXmlComplexType_t* osXmlComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pCtTagInfo, osXsdElement_t* pParentElem)
+{
+	osStatus_e status = OS_STATUS_OK;
 
-static osStatus_e osXml_getElementInfoFromTag(osList_t* pAttrList, osXmlElement_t* pElement)
+    osList_t tagList = {};
+    osXmlComplexType_t* pCtInfo = NULL;
+
+    if(!pXmlBuf || !pCtTagInfo)
+    {
+        logError("null pointer, pXmlBuf=%p, pCtTagInfo=%p.", pXmlBuf, pCtTagInfo);
+		status = OS_ERROR_NULL_POINTER;
+        goto EXIT;
+    }
+
+    pCtInfo = osmalloc(sizeof(osXmlComplexType_t), NULL);
+    osXmlComplexType_getAttrInfo(&pCtTagInfo->attrNVList, pCtInfo);
+
+    while(pXmlBuf->pos < pXmlBuf->end)
+    {
+		bool isTagDone = false; //the tag is wrapped in one line, i.e., <tag, tag-content />
+        bool isEndTag = false;  //the line is the end of tag, i.e., </tag>
+
+        //get tag info for each tags inside xs:complexType
+        osXmlTagInfo_t* pTagInfo = NULL;
+		status = osXml_parseTag(pXmlBuf, false, &isTagDone, &isEndTag, &pTagInfo);
+        if(status != OS_STATUS_OK || !pTagInfo)
+        {
+         	logError("fails to osXml_parseTag.");
+        	break;
+        }
+
+        if(isEndTag)
+        {
+        	osListElement_t* pLE = osList_popTail(&tagList);
+            if(!pLE)
+            {
+            	//"xs:complexType" was not pushed into tagList, so it is possible the end tag is "xs:complexType"
+                if(strncmp("xs:complexType", ((osXmlTagInfo_t*)pLE->data)->tag.p, ((osXmlTagInfo_t*)pLE->data)->tag.l))
+                {
+                	logError("expect the end tag for xs:complexType, but %r is found.", &((osXmlTagInfo_t*)pLE->data)->tag);
+                }
+                else
+                {
+                	//the parsing for a complexType is done
+                    if(!pCtInfo->typeName.l && !pParentElem)
+                    {
+                    	logInfo("parsed a complexType without name, and there is no parent element, pos=%ld.", pXmlBuf->pos);
+                    }
+
+                    if(pParentElem)
+                    {
+                    	//if the complexType is embedded inside a element, directly assign the complexType to the parent element
+                        if(osPL_cmp(&pParentElem->elemTypeName, &pCtInfo->typeName) == 0 || pParentElem->elemTypeName.l == 0)
+                        {
+                        	pParentElem->dataType = OS_XML_DATA_TYPE_COMPLEX;
+                            pParentElem->pComplex = pCtInfo;
+                        }
+                    }
+                }
+                goto EXIT;
+            }
+
+            //compare the end tag name (newly gotten) and the beginning tag name (from the LE)
+            if(osPL_cmp(&((osXmlTagInfo_t*)pLE->data)->tag, &pTagInfo->tag) == 0)
+            {
+            	osXmlComplexType_getSubTagInfo(pCtInfo, (osXmlTagInfo_t*)pLE->data);
+                continue;
+            }
+            else
+            {
+            	logError("input xml is invalid, error in (%r).", &pTagInfo->tag);
+                goto EXIT;
+            }
+        }
+
+        if(isTagDone)
+        {
+        	//no need to push to the tagList as the end tag is part of the line
+            osXmlComplexType_getSubTagInfo(pCtInfo, pTagInfo);
+        }
+        else
+        {
+        	//special treatment for xs:element, as xs:element can contain own tags
+            if(pTagInfo->tag.l == 10 && strncmp("xs:element", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+            {
+            	osXsdElement_t* pElem = osXmlElement_parse(pXmlBuf, pTagInfo);
+                if(!pElem)
+                {
+                	logError("fails to osXmlElement_parse, pos=%ld.", pXmlBuf->pos);
+                    goto EXIT;
+                }
+
+                osList_clear(&pTagInfo->attrNVList);
+                pTagInfo->isPElement = true;
+                pTagInfo->pElement = pElem;
+
+                osXmlComplexType_getSubTagInfo(pCtInfo, pTagInfo);
+            }
+            else
+            {
+               	//add the beginning tag to the tagList, the info in the beginning tag will be processed when the end tag is met
+                osList_append(&tagList, pTagInfo);
+            }
+        }
+	}
+
+EXIT:
+	return pCtInfo;
+}
+
+
+//parse starts from the first tag after the <xs:element xxxx>
+static osXsdElement_t* osXmlElement_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagInfo)
+{
+	osStatus_e status = OS_STATUS_OK;
+    osList_t tagList = {};
+	osXsdElement_t* pElement = NULL;
+
+	if(!pXmlBuf || !pElemTagInfo)
+	{
+		logError("null pointer, pXmlBuf=%p, pTagInfo=%p.", pXmlBuf, pElemTagInfo);
+		status = OS_ERROR_NULL_POINTER;
+		goto EXIT;
+	}
+
+    pElement = osmalloc(sizeof(osXsdElement_t), NULL);
+    osXmlElement_getAttrInfo(&pElemTagInfo->attrNVList, pElement);
+
+	//starts to parse the sub tags of xs:element
+    while(pXmlBuf->pos < pXmlBuf->end)
+    {
+    	bool isTagDone = false; //the tag is wrapped in one line, i.e., <tag, tag-content />
+        bool isEndTag = false;  //the line is the end of tag, i.e., </tag>
+
+        //get tag info for each tags inside xs:element
+        osXmlTagInfo_t* pTagInfo = NULL;
+		status = osXml_parseTag(pXmlBuf, false, &isTagDone, &isEndTag, &pTagInfo);
+        if(status != OS_STATUS_OK || !pTagInfo)
+        {
+        	logError("fails to osXml_parseTag.");
+            break;
+        }
+
+        if(isEndTag)
+        {
+            osListElement_t* pLE = osList_popTail(&tagList);
+            if(!pLE)
+            {
+            	//"xs:element" was not pushed into tagList, so it is possible the end tag is "xs:element"
+                if(((osXmlTagInfo_t*)pLE->data)->tag.l != 10 || strncmp("xs:element", ((osXmlTagInfo_t*)pLE->data)->tag.p, ((osXmlTagInfo_t*)pLE->data)->tag.l))
+                {
+                	logError("expect the end tag for xs:element, but %r is found.", &((osXmlTagInfo_t*)pLE->data)->tag);
+                }
+
+				goto EXIT;
+			}
+
+            //compare the end tag name (newly gotten) and the beginning tag name (from the LE)
+            if(osPL_cmp(&((osXmlTagInfo_t*)pLE->data)->tag, &pTagInfo->tag) == 0)
+            {
+            	osXmlElement_getSubTagInfo(pElement, (osXmlTagInfo_t*)pLE->data);
+                continue;
+            }
+            else
+            {
+                logError("input xml is invalid, error in (%r).", &pTagInfo->tag);
+                goto EXIT;
+            }
+		}
+
+        if(isTagDone)
+        {
+	        //no need to push to the tagList as the end tag is part of the line
+            osXmlElement_getSubTagInfo(pElement, pTagInfo);
+        }
+        else
+       	{
+        	//special treatment for xs:complexType, as xs:complex can contain own tags
+            if(pTagInfo->tag.l == 14 && strncmp("xs:complexType", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+            {
+				//the link between pElement and child type is done inside osXmlComplexType_parse()
+	            osXmlComplexType_t* pCtInfo = osXmlComplexType_parse(pXmlBuf, pTagInfo, pElement);
+	            if(!pCtInfo || pCtInfo->typeName.l)
+    	        {
+					//complex type within a element does not have type name
+                	logError("complexType is NULL or has typeName, pCtInfo=%p, typeName=%r.", pCtInfo, &pCtInfo->typeName);
+					if(pCtInfo)
+					{
+						osfree(pCtInfo);
+					}
+                	goto EXIT;
+				}
+            }
+            else
+            {
+                //add the beginning tag to the tagList, the info in the beginning tag will be processed when the end tag is met
+               	osList_append(&tagList, pTagInfo);
+            }
+        }
+	}
+
+EXIT:
+	return pElement;
+}
+
+
+static osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement)
 {
 	osStatus_e status = OS_STATUS_OK;
 	if(!pElement || !pAttrList)
@@ -559,15 +726,25 @@ EXIT:
 }
 
 
+static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagInfo_t* pTagInfo)
+{
+	//the parent element and child type link is already done as part of element parse, for now, this function does noting.
 
-//when this function is called, the tag has been identifid, pBuf->pos shall points to the pos after the last char of tag
+	return OS_STATUS_OK;
+}
+
+
+//isTagNameChecked = true, parse starts after tag name, = false, parse starts before <
 //isTagDone == true, the tag is wrapped in one line, i.e., <tag, tag-content />
 //isEndTag == true, the line is the end of tag, i.e., </tag>
-static osXmlTagInfo_t* osXml_getTagInfo(osMBuf_t* pBuf, bool isTagNameChecked, bool* isTagDone, bool* isEndTag) 
+static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool* isTagDone, bool* isEndTag, osXmlTagInfo_t** ppTagInfo) 
 {
-	if(!pBuf || !isTagDone || !isEndTag)
+	osStatus_e status = OS_STATUS_OK;
+
+	if(!pBuf || !isTagDone || !isEndTag || ppTagInfo)
 	{
-		logError("null pointer, pBuf=%p, isTagDone=%p, isEndTag=%p.", pBuf, isTagDone, isEndTag);
+		logError("null pointer, pBuf=%p, isTagDone=%p, isEndTag=%p, ppTagInfo=%p.", pBuf, isTagDone, isEndTag, ppTagInfo);
+		status = OS_ERROR_NULL_POINTER; 
 		goto EXIT;
 	}
 
@@ -743,7 +920,8 @@ static osXmlTagInfo_t* osXml_getTagInfo(osMBuf_t* pBuf, bool isTagNameChecked, b
 
 EXIT:
 	//to-do, cleanup memory if error case
-	return pTagInfo;
+	*ppTagInfo = pTagInfo;
+	return status;
 }
 
 
