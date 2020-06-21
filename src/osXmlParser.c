@@ -34,17 +34,17 @@ typedef struct osXmlNameValue {
 
 //for function osXml_parseTag()
 typedef enum {
-    OS_XML_TAG_INFO_START,
-    OS_XML_TAG_INFO_BEFORE_TAG_INSIDE_QUOTE,
-    OS_XML_TAG_INFO_TAG_START,
-    OS_XML_TAG_INFO_TAG,
-	OS_XML_TAG_INFO_CONTENT_NAME_START,
-	OS_XML_TAG_INFO_CONTENT_NAME,
-	OS_XML_TAG_INFO_CONTENT_NAME_STOP,
-	OS_XML_TAG_INFO_CONTENT_VALUE_START,
-	OS_XML_TAG_INFO_CONTENT_VALUE,
-    OS_XML_TAG_INFO_END_TAG_SLASH,
-} osXmlCheckTagInfoState_e;
+    OS_XSD_TAG_INFO_START,
+    OS_XSD_TAG_INFO_BEFORE_TAG_INSIDE_QUOTE,
+    OS_XSD_TAG_INFO_TAG_START,
+    OS_XSD_TAG_INFO_TAG,
+	OS_XSD_TAG_INFO_CONTENT_NAME_START,
+	OS_XSD_TAG_INFO_CONTENT_NAME,
+	OS_XSD_TAG_INFO_CONTENT_NAME_STOP,
+	OS_XSD_TAG_INFO_CONTENT_VALUE_START,
+	OS_XSD_TAG_INFO_CONTENT_VALUE,
+    OS_XSD_TAG_INFO_END_TAG_SLASH,
+} osXsdCheckTagInfoState_e;
 
 
 static osXsdElement_t* osXml_getRootElemInfo(osMBuf_t* pXmlBuf);
@@ -754,43 +754,43 @@ static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool* is
 	bool isGetTagInfoDone = false;
 	osXmlNameValue_t* pnvPair = NULL;
 	size_t tagPos = 0, nvStartPos = 0;
-	osXmlCheckTagInfoState_e state = OS_XML_TAG_INFO_START;
+	osXsdCheckTagInfoState_e state = OS_XSD_TAG_INFO_START;
 	if(isTagNameChecked)
 	{
 		//check tagInfo starts after the tag
-		state = OS_XML_TAG_INFO_CONTENT_NAME_START;
+		state = OS_XSD_TAG_INFO_CONTENT_NAME_START;
 	}
 	size_t origPos = pBuf->pos;
 	while(pBuf->pos < pBuf->end)
 	{
 		switch(state)
 		{
-			case OS_XML_TAG_INFO_START:
+			case OS_XSD_TAG_INFO_START:
 				//if(pBuf->buf[pBuf->pos] == 0x20 || pBuf->buf[pBuf->pos] == '\n' || pBuf->buf[pBuf->pos] == '\t')
 				//{
 				//	continue;
 				//}
 				if(pBuf->buf[pBuf->pos] == '<')
 				{
-					state = OS_XML_TAG_INFO_TAG_START;
+					state = OS_XSD_TAG_INFO_TAG_START;
 					tagPos = pBuf->pos+1;	//+1 means starts after '<'
 				}
 				else if(pBuf->buf[pBuf->pos] == '"')
 				{
-					state = OS_XML_TAG_INFO_BEFORE_TAG_INSIDE_QUOTE;
+					state = OS_XSD_TAG_INFO_BEFORE_TAG_INSIDE_QUOTE;
 				}
 				break;
-			case OS_XML_TAG_INFO_BEFORE_TAG_INSIDE_QUOTE:
+			case OS_XSD_TAG_INFO_BEFORE_TAG_INSIDE_QUOTE:
 				if(pBuf->buf[pBuf->pos] == '"')
                 {
-                    state = OS_XML_TAG_INFO_START;
+                    state = OS_XSD_TAG_INFO_START;
                 }
                 break;
-			case OS_XML_TAG_INFO_TAG_START:
+			case OS_XSD_TAG_INFO_TAG_START:
 				if(pBuf->buf[pBuf->pos] == '/')
 				{
 					*isEndTag = true;
-					state = OS_XML_TAG_INFO_TAG;
+					state = OS_XSD_TAG_INFO_TAG;
 				}
 				else if(pBuf->buf[pBuf->pos] == 0x20 || pBuf->buf[pBuf->pos] == '\n' || pBuf->buf[pBuf->pos] == '\t')
 				{
@@ -798,14 +798,14 @@ static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool* is
 					goto EXIT;
 				}
 				break;
-			case OS_XML_TAG_INFO_TAG:
+			case OS_XSD_TAG_INFO_TAG:
 				if(pBuf->buf[pBuf->pos] == 0x20 || pBuf->buf[pBuf->pos] == '\n' || pBuf->buf[pBuf->pos] == '\t')
 				{
 					pTagInfo = oszalloc(sizeof(osXmlTagInfo_t), NULL);
 					pTagInfo->tag.p = &pBuf->buf[tagPos];
 					pTagInfo->tag.l = pBuf->pos - tagPos;
 					
-					state = OS_XML_TAG_INFO_CONTENT_NAME_START;
+					state = OS_XSD_TAG_INFO_CONTENT_NAME_START;
 				}
 				else if(pBuf->buf[pBuf->pos] == '"')
 				{
@@ -813,7 +813,7 @@ static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool* is
 					goto EXIT;
 				}
 				break;
-			case OS_XML_TAG_INFO_CONTENT_NAME_START:
+			case OS_XSD_TAG_INFO_CONTENT_NAME_START:
 				if(pBuf->buf[pBuf->pos] == '"')
 				{
 					logError("attribute starts with double quote, pos=%ld.", pBuf->pos);
@@ -832,18 +832,18 @@ static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool* is
 
 					//insert into pTagInfo->attrNVList
 					osList_append(&pTagInfo->attrNVList, pnvPair);
-					state = OS_XML_TAG_INFO_CONTENT_NAME;
+					state = OS_XSD_TAG_INFO_CONTENT_NAME;
 				}
                 else if(pBuf->buf[pBuf->pos] == '/')
                 {
-                    state = OS_XML_TAG_INFO_END_TAG_SLASH;
+                    state = OS_XSD_TAG_INFO_END_TAG_SLASH;
                 }
 				else if(pBuf->buf[pBuf->pos] == '>')
 				{
 					isGetTagInfoDone = true;
 				}
 				break;
-			case OS_XML_TAG_INFO_CONTENT_NAME:
+			case OS_XSD_TAG_INFO_CONTENT_NAME:
 				if(pBuf->buf[pBuf->pos] == '"')
                 {
                     logError("xml tag attribute name contains double quote, pos=%ld.", pBuf->pos);
@@ -854,18 +854,18 @@ static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool* is
 					pnvPair->name.l = pBuf->pos - nvStartPos;
 					if(pBuf->buf[pBuf->pos] == '=')
 					{
-						 state = OS_XML_TAG_INFO_CONTENT_VALUE_START;
+						 state = OS_XSD_TAG_INFO_CONTENT_VALUE_START;
 					}
 					else
 					{
-						state = OS_XML_TAG_INFO_CONTENT_NAME_STOP;
+						state = OS_XSD_TAG_INFO_CONTENT_NAME_STOP;
 					}
 				}
 				break;
-			case OS_XML_TAG_INFO_CONTENT_NAME_STOP:
+			case OS_XSD_TAG_INFO_CONTENT_NAME_STOP:
 				if(pBuf->buf[pBuf->pos] == '=')
 				{
-					state = OS_XML_TAG_INFO_CONTENT_VALUE_START;
+					state = OS_XSD_TAG_INFO_CONTENT_VALUE_START;
 				}
 				else if(!OSXML_IS_LWS(pBuf->buf[pBuf->pos]))
 				{
@@ -873,13 +873,13 @@ static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool* is
 					goto EXIT;
 				}
 				break;
-			case OS_XML_TAG_INFO_CONTENT_VALUE_START:
+			case OS_XSD_TAG_INFO_CONTENT_VALUE_START:
 				if(pBuf->buf[pBuf->pos] == '"')
 				{
                     pnvPair->value.p = &pBuf->buf[pBuf->pos];
                     nvStartPos = pBuf->pos + 1;		//+1 to start after the current char "
 
-					state = OS_XML_TAG_INFO_CONTENT_VALUE;
+					state = OS_XSD_TAG_INFO_CONTENT_VALUE;
 				}
                 else if(!OSXML_IS_LWS(pBuf->buf[pBuf->pos]))
                 {
@@ -887,14 +887,14 @@ static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool* is
                     goto EXIT;
                 }
                 break;
-			case OS_XML_TAG_INFO_CONTENT_VALUE:
+			case OS_XSD_TAG_INFO_CONTENT_VALUE:
 				if(pBuf->buf[pBuf->pos] == '"')
                 {
 					pnvPair->value.l = pBuf->pos - nvStartPos;
-					state = OS_XML_TAG_INFO_CONTENT_NAME_START;
+					state = OS_XSD_TAG_INFO_CONTENT_NAME_START;
 				}
 				break;
-            case OS_XML_TAG_INFO_END_TAG_SLASH:
+            case OS_XSD_TAG_INFO_END_TAG_SLASH:
                 if(pBuf->buf[pBuf->pos] == '>')
                 {
                     *isTagDone = true;
