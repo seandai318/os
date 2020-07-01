@@ -1,3 +1,10 @@
+/* copyright seandai 2020
+ * xsd and xml parser, support the following xml format:
+ * xs:boolean, xs:integer, xs:string, xs:complex
+ * validate the xml against xsd.  If a call back is provided, the leaf information of all xml leave elements will be provided via the callback
+ */
+
+
 #include <string.h>
 #include <stdlib.h>
 
