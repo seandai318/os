@@ -10,7 +10,9 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+
 #include "osTypes.h"
+#include "osDebug.h"
 
 
 struct osMBuf;
@@ -57,6 +59,7 @@ void osPL_setMBuf(osPointerLen_t *pl, const struct osMBuf *mb);
 //simply set the p and l to a osPointerLen, no memory allocation is performed.
 void osPL_set(osPointerLen_t* pl, void* p, size_t l);
 uint32_t osPL_str2u32(const osPointerLen_t *pl);
+osStatus_e osPL_convertStr2u32(const osPointerLen_t *pl, uint32_t* pValue);
 uint32_t osPL_hexstr2u32(const osPointerLen_t *pl);
 uint64_t osPL_str2u64(const osPointerLen_t *pl);
 uint64_t osPL_hexstr2u64(const osPointerLen_t *pl);

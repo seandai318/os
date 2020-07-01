@@ -116,6 +116,34 @@ uint32_t osPL_str2u32(const osPointerLen_t *pl)
 }
 
 
+osStatus_e osPL_convertStr2u32(const osPointerLen_t *pl, uint32_t* pValue)
+{
+	if(!pl || !pl->p)
+    {
+		logError("null pointer, pl=%p, pl->p=%p.", pl, pl->p);		
+        return OS_ERROR_NULL_POINTER;
+    }
+
+	*pValue = 0;
+    uint32_t multiple=1;
+    const char *ptr;
+
+    ptr = &pl->p[pl->l];
+    while (ptr > pl->p)
+    {
+        const int c = *--ptr - '0';
+        if (c > 9 || c < 0)
+        {
+            return OS_ERROR_INVALID_VALUE;
+        }
+
+        *pValue += multiple * c;
+        multiple *= 10;
+    }
+
+    return OS_STATUS_OK;
+}
+
 /**
  * Convert a hex pointer-length object to a numeric 32-bit value
  *

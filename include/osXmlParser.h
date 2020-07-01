@@ -1,9 +1,14 @@
 #ifndef _OS_XML_PARSER_H
 #define _OS_XML_PARSER_H
 
+#include "osList.h"
 
+
+#define OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM	50
 #define OSXML_IS_LWS(a) (!(a^0x20) || !(a^0x9) || !(a^0xa))
 #define OSXML_IS_XS_TYPE(a) (a != NULL && a->l >=3 && !(a->p[0]^'x') && !(a->p[1]^'s') && !(a->p[2]^':'))
+#define OSXML_IS_COMMENT_START(p) (*p=='<' && *(p+1)=='!' && *(p+2)=='-' && *(p+3)=='-')
+#define OSXML_IS_COMMENT_STOP(p) (*p=='>' && *(p-1)=='-' && *(p-2)=='-')
 
 
 typedef enum {
@@ -34,12 +39,13 @@ typedef enum {
 } osXmlElemDispType_e;
 
 
+typedef void (*osXmlDataCallback_h)(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType);
 
 typedef struct osXml_complexTypeInfo {
     osPointerLen_t typeName;
     bool isMixed;
 	osXmlElemDispType_e elemDispType;
-	osList_t elemList;
+	osList_t elemList;		//each element is comprised of osXsdElement_t
 } osXmlComplexType_t;
 
 
@@ -47,22 +53,39 @@ typedef struct osXsdElement {
 	bool isRootElement;
 	osPointerLen_t elemName;
 	osPointerLen_t elemTypeName;
-	int minOccurs;
-	int maxOccurs;
+	int minOccurs;			//>=0
+	int maxOccurs;			// -1 means unbounded
     bool isQualified;
     osPointerLen_t elemDefault;
     osPointerLen_t fixed;
+//	osXmlDataCallback_h callback;
 	osXmlDataType_e dataType;
+	osXmlComplexType_t* pComplex;
+#if 0
 	union {
 		bool isTrue;
 		int intValue;
 		osPointerLen_t string;
 		osXmlComplexType_t* pComplex;
-	};
+	}
+#endif
 } osXsdElement_t;
 
 
-osXsdElement_t* osXml_parseXsd(osMBuf_t* pXmlBuf);
+typedef struct osXmlElement {
+	osPointerLen_t name;
+	osList_t* pChild;
+    osXmlDataType_e dataType;	//if DataType != XS type, pChild=NULL, there is corresponding data inside union, otherwise, pChild != NULL, but there is no data inside union.
+    union {
+        bool isTrue;			//boolean
+        int intValue;			//integer
+        osPointerLen_t string;	//string
+    };
+} osXmlElement_t;
+
+
+osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf);
+osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallback_h callback);
 
 
 #endif
