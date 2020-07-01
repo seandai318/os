@@ -55,6 +55,7 @@ typedef enum {
 typedef struct osXsd_elemPointer {
     osXsdElement_t* pCurElem;       //the current working xsd element
 	struct osXsd_elemPointer* pParentXsdPointer;	//the parent xsd pointer
+	int curIdx;						//curIdx in assignedChildIdx[], used in for the ordering presence of sequence deposition
     bool  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
 } osXsd_elemPointer_t;
 
@@ -78,7 +79,8 @@ static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagI
 static bool osXml_findWhiteSpace(osMBuf_t* pBuf, bool isAdvancePos);
 static bool osXml_findPattern(osMBuf_t* pXmlBuf, osPointerLen_t* pPattern, bool isAdvancePos);
 static bool osXml_isXsdElemXSType(osXsdElement_t* pXsdElem);
-static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, int* listIdx);
+static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, osXmlElemDispType_e* pParentXsdDispType, int* listIdx);
+static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer);
 
 
 static void tempPrint(osList_t* pList, int i)
@@ -96,28 +98,29 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
 {
 	osStatus_e status = OS_STATUS_OK;	
 	osXsdElement_t* pRootElem = NULL;
+    osXmlTagInfo_t* pXsdGlobalElemTagInfo = NULL;
 	osList_t typeList = {};
 	
 	if(!pXmlBuf)
 	{
 		logError("null pointer, pXmlBuf.");
+		status = OS_ERROR_NULL_POINTER;
 		goto EXIT;
 	}
 
 	if(osXml_parseFirstTag(pXmlBuf) != OS_STATUS_OK)
 	{
 		logError("fails to parse the xsd first line.");
+		status = OS_ERROR_INVALID_VALUE;
 		goto EXIT;
 	}
 
-debug("to-remove, 1");
-
 	bool isSchemaTagDone = false;
     bool isEndSchemaTag = false;
-	osXmlTagInfo_t* pXsdGlobalElemTagInfo = NULL;
 	if(osXsd_parseSchemaTag(pXmlBuf, &isSchemaTagDone) != OS_STATUS_OK)
     {
         logError("fails to parse the xsd schema.");
+		status = OS_ERROR_INVALID_VALUE;
         goto EXIT;
     }
 
@@ -126,6 +129,13 @@ debug("to-remove, 1");
 		osXmlTagInfo_t* pGlobalElemTagInfo = NULL;
 		status = osXsd_parseGlobalTag(pXmlBuf, &typeList, &pGlobalElemTagInfo, &isEndSchemaTag);
 
+		if(status != OS_STATUS_OK)
+		{
+			logError("fails to osXsd_parseGlobalTag, pos=%ld", pXmlBuf->pos);
+	        status = OS_ERROR_INVALID_VALUE;
+			goto EXIT;
+		}
+
 		//find a global element
 		if(pGlobalElemTagInfo)
 		{
@@ -133,6 +143,8 @@ debug("to-remove, 1");
 			if(pXsdGlobalElemTagInfo)
 			{
 				logError("more than one global elements.");
+				osfree(pGlobalElemTagInfo);
+        		status = OS_ERROR_INVALID_VALUE;
 				goto EXIT;
 			}
 
@@ -152,6 +164,7 @@ debug("to-remove, 1");
                 if(!pRootElem)
                 {
                     logError("fails to osXmlElement_parse for root element, pos=%ld.", pXmlBuf->pos);
+	                status = OS_ERROR_INVALID_VALUE;
                     goto EXIT;
                 }
 			}
@@ -177,6 +190,12 @@ tempPrint(&typeList, 2);
 EXIT:
 	osList_clear(&typeList);
 	osfree(pXsdGlobalElemTagInfo);
+
+	if(status != OS_STATUS_OK)
+	{
+		osfree(pRootElem);
+		pRootElem = NULL;
+	}
 
 	return pRootElem;
 }
@@ -244,7 +263,80 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
             osXsdElement_t* pCurXsdElem = ((osXsd_elemPointer_t*)pLE->data)->pCurElem;
 			if(((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer != pParentXsdPointer)
 			{
-				//to-do, check whether there is any min=0, max=0 element, and whether there is mandatory element not in the xml
+				//need to move one layer up.  before doing it, check whether there is any min=0, max=0 element, and whether there is mandatory element not in the xml
+				osXmlComplexType_t* pParentCT = osXsdPointer_getCT(pParentXsdPointer);
+				if(!pParentCT)
+				{
+					logError("Parent xsd element is not a Complex type.");
+                	status = OS_ERROR_INVALID_VALUE;
+                	goto EXIT;
+            	}
+				
+				osXmlElemDispType_e elemDispType = pParentCT->elemDispType;
+				int choiceElemCount = 0;
+				for(int i=0; i<osList_getCount(&pParentCT->elemList); i++)
+				{
+					switch(elemDispType)
+					{
+						case OS_XML_ELEMENT_DISP_TYPE_ALL:
+						{
+							if(pParentXsdPointer->assignedChildIdx[i] == 0)
+							{
+	                            osXsdElement_t* pXsdElem = osList_getDataByIdx(&pParentCT->elemList, i);
+    	                        if(!pXsdElem)
+        	                    {
+            	                    logError("elemList idx(%d) does not have xsd element data, this shall never happen.", i);
+                	                goto EXIT;
+                    	        }
+
+								if(pXsdElem->minOccurs > 0)
+								{
+									logError("element(%r) minOccurs=%d, but xml does not have the corresponding data.", &pXsdElem->elemName, pXsdElem->minOccurs);
+									status = OS_ERROR_INVALID_VALUE;
+									goto EXIT;
+								}
+								else if(pXsdElem->fixed.p && pXsdElem->fixed.l > 0)
+								{
+									if(callback)
+									{
+										callback(&pXsdElem->elemName, &pXsdElem->fixed, pXsdElem->dataType);
+									}
+								}
+							}
+							else
+							{
+								//the check of the maxOccurs is done in <element_name> section, do nothing here.
+							}
+							break;
+						}
+						case OS_XML_ELEMENT_DISP_TYPE_CHOICE:
+						{
+							if(pParentXsdPointer->assignedChildIdx[i] != 0)
+							{
+								choiceElemCount++;
+							}
+
+							if(choiceElemCount > 1)
+							{
+                                osXsdElement_t* pXsdElem = osList_getDataByIdx(&pParentCT->elemList, i);
+                                if(!pXsdElem)
+                                {
+                                    logError("elemList idx(%d) does not have xsd element data, this shall never happen.", i);
+                                    goto EXIT;
+                                }
+
+								logError("element(%r) belongs to a complex type that has choice disposition, but there is already other element present.", &pXsdElem->elemName);
+								status = OS_ERROR_INVALID_VALUE;
+                                goto EXIT;
+                            }
+ 							break;
+						}
+						case OS_XML_ELEMENT_DISP_TYPE_SEQUENCE:
+							//shall already be taken care of in <element_name> section, no need to consider here.
+							break;
+					}
+				}
+						
 				pParentXsdPointer = ((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer;
 			}
             if(osPL_cmp(&pElemInfo->tag, &pCurXsdElem->elemName) != 0)
@@ -275,7 +367,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
             //case <element_name xxx />, for now we do not process attribute
             if(pParentXsdPointer)
             {
-                if((pXsdPointer->pCurElem = osXml_getChildXsdElemByTag(&pElemInfo->tag, pParentXsdPointer, &listIdx)) == NULL)
+                if((pXsdPointer->pCurElem = osXml_getChildXsdElemByTag(&pElemInfo->tag, pParentXsdPointer, NULL, &listIdx)) == NULL)
                 {
                     logError("the xsd does not have matching tag(%r) does not match with xsd.", &pElemInfo->tag);
                     goto EXIT;
@@ -305,13 +397,70 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
             }
             else
             {
-                if((pXsdPointer->pCurElem = osXml_getChildXsdElemByTag(&pElemInfo->tag, pParentXsdPointer, &listIdx)) == NULL)
+				osXmlElemDispType_e parentXsdDispType = OS_XML_ELEMENT_DISP_TYPE_ALL;
+                if((pXsdPointer->pCurElem = osXml_getChildXsdElemByTag(&pElemInfo->tag, pParentXsdPointer, &parentXsdDispType, &listIdx)) == NULL)
                 {
                     logError("the xsd does not have matching tag(%r) does not match with xsd.", &pElemInfo->tag);
                     status = OS_ERROR_INVALID_VALUE;
                     goto EXIT;
                 }
 
+				//check OS_XML_ELEMENT_DISP_TYPE_SEQUENCE case to make sure the element is ordered
+				if(parentXsdDispType == OS_XML_ELEMENT_DISP_TYPE_SEQUENCE)
+				{
+					if(listIdx == pParentXsdPointer->curIdx)
+					{
+						//do nothing
+					}
+					else if(listIdx > pParentXsdPointer->curIdx)
+					{
+                        osXmlComplexType_t* pParentCT = osXsdPointer_getCT(pParentXsdPointer);
+                        if(!pParentCT)
+                        {
+                            logError("Parent xsd element is not a Complex type.");
+                            status = OS_ERROR_INVALID_VALUE;
+                            goto EXIT;
+                        }
+
+						//check the element in front of the curElem
+						for(int i=pParentXsdPointer->curIdx; i<listIdx; i++)
+						{
+							if(pParentXsdPointer->assignedChildIdx[i] == 0)
+							{
+								osXsdElement_t* pXsdElem = osList_getDataByIdx(&pParentCT->elemList, pParentXsdPointer->curIdx);
+		                        if(!pXsdElem)
+        		                {
+                		            logError("elemList idx(%d) does not have xsd element data, this shall never happen.", pParentXsdPointer->curIdx);
+                        		    goto EXIT;
+                        		}
+
+                        		if(pXsdElem->minOccurs == 0)
+								{
+                                	if(pXsdElem->elemDefault.p && pXsdElem->elemDefault.l > 0)
+                                	{
+                                    	if(callback)
+                                    	{
+                                        	callback(&pXsdElem->elemName, &pXsdElem->elemDefault, pXsdElem->dataType);
+                                    	}
+                                	}
+								}
+								else
+								{
+		                            logError("element(%r) minOccurs=%d, and the parent CT is sequence disposition type, but it does not show up before idx(%d).", &pXsdElem->elemName, pXsdElem->minOccurs, listIdx);
+        		                    status = OS_ERROR_INVALID_VALUE;
+                		            goto EXIT;
+                        		}
+							}
+						}
+						pParentXsdPointer->curIdx = listIdx;
+					}
+					else
+					{
+						logError("get a listIdx(%d) that is smaller than the current idx(%d), and the parent CT is sequence ddisposition type.", listIdx, pParentXsdPointer->curIdx);
+                        status = OS_ERROR_INVALID_VALUE;
+                        goto EXIT;
+					}
+				}
 				//check the maximum element occurrence is not exceeded
 				++pParentXsdPointer->assignedChildIdx[listIdx];
 				debug("pParentXsdPointer->assignedChildIdx[%d]=%d", listIdx, pParentXsdPointer->assignedChildIdx[listIdx]);
@@ -426,6 +575,7 @@ static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, o
 		goto EXIT;
 	}
 
+debug("to-remove, tag=%r", &pTagInfo->tag);
 	switch(pTagInfo->tag.l)
 	{
 		case OS_XML_COMPLEXTYPE_LEN:        //len = 14, "xs:complexType"
@@ -440,7 +590,11 @@ debug("to-remove, decode: xs:complexType, pXmlBuf->buf[pXmlBuf->pos]=%c, pXmlBuf
 			osXmlComplexType_t* pCtInfo = osXsdComplexType_parse(pXmlBuf, pTagInfo, NULL);
 			if(!pCtInfo || !pCtInfo->typeName.l)
 			{
-				logError("global type is NULL or has no typeName, pCtInfo=%p, typeName.l=%ld.", pCtInfo, pCtInfo->typeName.l);
+				logError("global type is NULL or has no typeName, pCtInfo=%p, typeName.l=%ld.", pCtInfo, pCtInfo ? pCtInfo->typeName.l : 0);
+				if(pCtInfo)
+				{
+					osfree(pCtInfo);
+				}
 				status = OS_ERROR_INVALID_VALUE;
 				break;
 			}
@@ -482,51 +636,6 @@ EXIT:
     return status;
 }
 
-#if 0
-static osXsdElement_t* osXsd_getRootElemInfo(osMBuf_t* pXmlBuf)
-{
-	osStatus_e status = OS_STATUS_OK;
-	osXsdElement_t* pRootElement = NULL;
-	osXmlTagInfo_t* pTagInfo = NULL;
-
-    if(!pXmlBuf)
-    {
-        logError("null pointer, pCtInfo.");
-        goto EXIT;
-    }
-
-//    bool isTagDone = false; //the tag is wrapped in one line, i.e., <tag, tag-content />
-//    bool isEndTag = false;  //the line is the end of tag, i.e., </tag>
-    status = osXml_parseTag(pXmlBuf, true, false, &pTagInfo, NULL);
-    if(status != OS_STATUS_OK || !pTagInfo)
-    {
-        logError("fails to osXml_parseTag.");
-        goto EXIT;
-    }
-
-	if(pTagInfo->isTagDone)
-	{
-		//for <xs:element name="A" type="B" />
-		pRootElement = oszalloc(sizeof(osXsdElement_t), NULL);
-
-		osXmlElement_getAttrInfo(&pTagInfo->attrNVList, pRootElement);
-	}
-	else
-	{
-		//for <xs:element name="A" type="B" ><xs:complexType name="C">...</xs:complexType></xs:element>, TO-DO
-		osXsdElement_t* pElem = osXmlElement_parse(pXmlBuf, pTagInfo);
-        if(!pElem)
-        {
-        	logError("fails to osXmlElement_parse, pos=%ld.", pXmlBuf->pos);
-            goto EXIT;
-        }
-	}
-
-EXIT:
-	osfree(pTagInfo);
-	return pRootElement;
-}
-#endif
 
 static osStatus_e osXsdComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplexType_t* pCtInfo)
 {
@@ -687,6 +796,7 @@ static osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInf
         if(status != OS_STATUS_OK || !pTagInfo)
         {
          	logError("fails to osXml_parseTag.");
+			status = OS_ERROR_INVALID_VALUE;
         	break;
         }
 
@@ -699,6 +809,7 @@ static osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInf
                 if(strncmp("xs:complexType", pTagInfo->tag.p, pTagInfo->tag.l))
                 {
                 	logError("expect the end tag for xs:complexType, but %r is found.", &((osXmlTagInfo_t*)pLE->data)->tag);
+            		status = OS_ERROR_INVALID_VALUE;
                 }
                 else
                 {
@@ -722,6 +833,7 @@ static osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInf
             }
 
             //compare the end tag name (newly gotten) and the beginning tag name (from the LE)
+debug("to-remove, pTagInfo->tag=%r, pLE->data)->tag=%r", &pTagInfo->tag, &((osXmlTagInfo_t*)pLE->data)->tag);
             if(osPL_cmp(&((osXmlTagInfo_t*)pLE->data)->tag, &pTagInfo->tag) == 0)
             {
             	osXsdComplexType_getSubTagInfo(pCtInfo, (osXmlTagInfo_t*)pLE->data);
@@ -730,6 +842,7 @@ static osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInf
             else
             {
             	logError("input xml is invalid, error in (%r).", &pTagInfo->tag);
+				status = OS_ERROR_INVALID_VALUE;
                 goto EXIT;
             }
         }
@@ -748,6 +861,7 @@ static osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInf
                 if(!pElem)
                 {
                 	logError("fails to osXmlElement_parse, pos=%ld.", pXmlBuf->pos);
+					status = OS_ERROR_INVALID_VALUE;
                     goto EXIT;
                 }
 
@@ -766,6 +880,11 @@ static osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInf
 	}
 
 EXIT:
+	if(status != OS_STATUS_OK)
+	{
+		osfree(pCtInfo);
+		pCtInfo = NULL;
+	}
 	return pCtInfo;
 }
 
@@ -780,9 +899,6 @@ static osStatus_e osXml_parseFirstTag(osMBuf_t* pXmlBuf)
 		status = OS_ERROR_NULL_POINTER;
 		goto EXIT;
 	}
-
-//    bool isTagDone = false; //the tag is wrapped in one line, i.e., <tag, tag-content />
-//    bool isEndTag = false;  //the line is the end of tag, i.e., </tag>
 
     //get tag info for the immediate next tag
     osXmlTagInfo_t* pTagInfo = NULL;
@@ -922,9 +1038,6 @@ static osXsdElement_t* osXmlElement_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pEl
 	//starts to parse the sub tags of xs:element
     while(pXmlBuf->pos < pXmlBuf->end)
     {
-//    	bool isTagDone = false; //the tag is wrapped in one line, i.e., <tag, tag-content />
-//        bool isEndTag = false;  //the line is the end of tag, i.e., </tag>
-
         //get tag info for each tags inside xs:element
         osXmlTagInfo_t* pTagInfo = NULL;
 		status = osXml_parseTag(pXmlBuf, false, false, &pTagInfo, NULL);
@@ -976,7 +1089,7 @@ static osXsdElement_t* osXmlElement_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pEl
 	            if(!pCtInfo || pCtInfo->typeName.l)
     	        {
 					//complex type within a element does not have type name
-                	logError("complexType is NULL or has typeName, pCtInfo=%p, typeName=%r.", pCtInfo, &pCtInfo->typeName);
+                	logError("complexType is NULL or has typeName, pCtInfo=%p, typeName=%r.", pCtInfo, pCtInfo ? &pCtInfo->typeName : 0);
 					if(pCtInfo)
 					{
 						osfree(pCtInfo);
@@ -1696,7 +1809,7 @@ EXIT:
 }
 
 
-static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, int* listIdx)
+static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, osXmlElemDispType_e* pParentXsdDispType, int* listIdx)
 {
     osXsdElement_t* pChildXsdElem = NULL;
 
@@ -1713,6 +1826,10 @@ static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_el
     }
 
     osXmlComplexType_t* pCT = pXsdPointer->pCurElem->pComplex;
+	if(pParentXsdDispType)
+	{
+		*pParentXsdDispType = pCT->elemDispType;
+	}
     osListElement_t* pLE = pCT->elemList.head;
     *listIdx = -1;
     while(pLE)
@@ -1731,3 +1848,25 @@ EXIT:
     return pChildXsdElem;
 }
 
+
+static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer)
+{
+	osXmlComplexType_t* pCT = NULL;
+
+	if(!pXsdPointer)
+	{
+		logError("null pointer, pXsdPointer.");
+		goto EXIT;
+	}
+
+	if(osXml_isXsdElemXSType(pXsdPointer->pCurElem))
+    {
+        logInfo("the element(%r) is a XS type.", &pXsdPointer->pCurElem->elemName);
+        goto EXIT;
+    }
+		
+	pCT = pXsdPointer->pCurElem->pComplex;
+
+EXIT:
+	return pCT;
+}

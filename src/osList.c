@@ -563,6 +563,28 @@ osListElement_t* osList_popTail(const osList_t *list)
 }
 
 
+void* osList_getDataByIdx(osList_t* list, int idx)
+{
+	if(!list || idx < 0)
+	{
+		return NULL;
+	}
+
+	osListElement_t* pLE = list->head;
+	int i = 0;
+	while(pLE)
+	{
+		if(i == idx)
+		{
+			return pLE->data;
+		}
+
+		i++;
+		pLE = pLE->next;
+	}
+
+	return NULL;
+}
 /**
  * Get the number of elements in a linked list
  *

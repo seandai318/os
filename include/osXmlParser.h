@@ -58,17 +58,8 @@ typedef struct osXsdElement {
     bool isQualified;
     osPointerLen_t elemDefault;
     osPointerLen_t fixed;
-//	osXmlDataCallback_h callback;
 	osXmlDataType_e dataType;
 	osXmlComplexType_t* pComplex;
-#if 0
-	union {
-		bool isTrue;
-		int intValue;
-		osPointerLen_t string;
-		osXmlComplexType_t* pComplex;
-	}
-#endif
 } osXsdElement_t;
 
 
