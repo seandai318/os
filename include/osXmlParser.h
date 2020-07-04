@@ -41,8 +41,6 @@ typedef enum {
 } osXmlElemDispType_e;
 
 
-typedef void (*osXmlDataCallback_h)(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType);
-
 typedef struct osXml_complexTypeInfo {
     osPointerLen_t typeName;
     bool isMixed;
@@ -77,9 +75,13 @@ typedef struct osXmlElement {
 } osXmlElement_t;
 
 
+typedef void (*osXmlDataCallback_h)(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType);
+typedef void (*osXsdElemCallback_h)(osXsdElement_t* pXsdElem, osXmlDataCallback_h callback);
+
+
 osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf);
 osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallback_h callback);
-void osXsd_browseChildNodes(osXsdElement_t* pXsdElem, osXmlDataCallback_h callback);
+void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdElemCallback, osXmlDataCallback_h callback);
 
 
 #endif

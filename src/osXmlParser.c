@@ -84,6 +84,9 @@ static osXmlComplexType_t* osXsd_getCTByname(osList_t* pTypeList, osPointerLen_t
 static osStatus_e osXml_parseFirstTag(osMBuf_t* pBuf);
 static osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, bool* isSchemaTagDone);
 static osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue);
+static void osXsdElement_cleanup(void* data);
+static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback);
+static void osXsdElemCallback(osXsdElement_t* pXsdElem, osXmlDataCallback_h xmlCallback);
 
 static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos);
 static osXmlDataType_e osXml_getElementType(osPointerLen_t* pTypeValue);
@@ -97,8 +100,7 @@ static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_el
 static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer);
 static void osXmlTagInfo_cleanup(void* data);
 static void osXmlComplexType_cleanup(void* data);
-static void osXsdElement_cleanup(void* data);
-static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXmlDataCallback_h callback);
+
 
 
 static void tempPrint(osList_t* pList, int i)
@@ -220,25 +222,25 @@ EXIT:
 }
 
 
-void osXsd_browseChildNodes(osXsdElement_t* pXsdElem, osXmlDataCallback_h callback)
+void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback)
 {
-    if(!pXsdElem)
+    if(!pXsdElem || !xsdCallback)
     {
-        logError("null pointer, pXsdElem.");
+        logError("null pointer, pXsdElem=%p, xsdCallback=%p.", pXsdElem, xsdCallback);
         return;
     }
 
-    if(pXsdElem->dataType != OS_XML_DATA_TYPE_COMPLEX)
-    {
-        logInfo("pXsdElem->dataType != OS_XML_DATA_TYPE_COMPLEX, ignore.");
-        return;
-    }
+	//callback to provide info for each xsdElement.
+	xsdCallback(pXsdElem, xmlCallback);
 
-    osXsd_ctPointer_t* pCTPointer = oszalloc(sizeof(osXsd_ctPointer_t), NULL);
-    pCTPointer->pCT = pXsdElem->pComplex;
-    pCTPointer->doneListIdx = 0;
-    osXsd_transverseCT(pCTPointer, callback);
-    osfree(pCTPointer);
+	if(pXsdElem->dataType == OS_XML_DATA_TYPE_COMPLEX)
+	{
+    	osXsd_ctPointer_t* pCTPointer = oszalloc(sizeof(osXsd_ctPointer_t), NULL);
+    	pCTPointer->pCT = pXsdElem->pComplex;
+    	pCTPointer->doneListIdx = 0;
+    	osXsd_transverseCT(pCTPointer, xsdCallback, xmlCallback);
+    	osfree(pCTPointer);
+	}
 }
 
 
@@ -344,25 +346,11 @@ debug("to-remove-4, pParentXsdPointer.elem=%r", pParentXsdPointer ? (&pParentXsd
 									status = OS_ERROR_INVALID_VALUE;
 									goto EXIT;
 								}
-								else if(!osXml_isXsdElemXSType(pXsdElem))
+								else
 								{
-									//if pXsdElem is a complex type
-									osXsd_browseChildNodes(pXsdElem, callback);
+									//browse the info for xsd that is not configured in the xml file, and do callback if required  
+									osXsd_browseNode(pXsdElem, osXsdElemCallback, callback);
 								}
-								else if(pXsdElem->fixed.p && pXsdElem->fixed.l > 0)
-								{
-									if(callback)
-									{
-										callback(&pXsdElem->elemName, &pXsdElem->fixed, pXsdElem->dataType);
-									}
-								}
-								else if(pXsdElem->elemDefault.p && pXsdElem->elemDefault.l > 0)
-								{
-                                    if(callback)
-                                    {
-                                        callback(&pXsdElem->elemName, &pXsdElem->elemDefault, pXsdElem->dataType);
-                                    }
-                                }
 							}
 							else
 							{
@@ -511,25 +499,8 @@ debug("to-remove-2, pParentXsdPointer=%p, pParentXsdPointer.elem=%r", pParentXsd
 
                         		if(pXsdElem->minOccurs == 0)
 								{
-                                	if(!osXml_isXsdElemXSType(pXsdElem))
-                                	{
-                                    	//if pXsdElem is a complex type
-                                    	osXsd_browseChildNodes(pXsdElem, callback);
-                                	}
-                                	else if(pXsdElem->fixed.p && pXsdElem->fixed.l > 0)
-                                	{
-                                    	if(callback)
-                                    	{
-                                        	callback(&pXsdElem->elemName, &pXsdElem->fixed, pXsdElem->dataType);
-                                    	}
-                                	}
-                                	else if(pXsdElem->elemDefault.p && pXsdElem->elemDefault.l > 0)
-                                	{
-                                    	if(callback)
-                                    	{
-                                        	callback(&pXsdElem->elemName, &pXsdElem->elemDefault, pXsdElem->dataType);
-                                    	}
-                                	}
+                                    //browse the info for xsd that is not configured in the xml file, and do callback if required
+									osXsd_browseNode(pXsdElem, osXsdElemCallback, callback);
 								}
 								else
 								{
@@ -2010,11 +1981,11 @@ EXIT:
 
 
 
-static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXmlDataCallback_h callback)
+static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback)
 {
-    if(!pCTPointer)
+    if(!pCTPointer || !xsdCallback)
     {
-        logError("null pointer, pCTPointer.");
+        logError("null pointer, pCTPointer=%p, xsdCallback=%p.", pCTPointer, xsdCallback);
         return;
     }
 
@@ -2028,28 +1999,13 @@ static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXmlDataCallback_
             pCTPointer->doneListIdx++;
             osXsdElement_t* pChildElem = pLE->data;
 
-			if(osXml_isXsdElemXSType(pChildElem))
-			{
-				if(pChildElem->fixed.p && pChildElem->fixed.l > 0)
-            	{
-            		if(callback)
-                	{
-                		callback(&pChildElem->elemName, &pChildElem->fixed, pChildElem->dataType);
-                	}
-            	}
-            	else if(pChildElem->elemDefault.p && pChildElem->elemDefault.l > 0)
-            	{
-             		if(callback)
-                	{
-                		callback(&pChildElem->elemName, &pChildElem->elemDefault, pChildElem->dataType);
-                	}
-            	}
-			}
-			else
+			xsdCallback(pChildElem, xmlCallback);
+
+			if(!osXml_isXsdElemXSType(pChildElem))
             {
                 osXsd_ctPointer_t* pNextCTPointer = oszalloc(sizeof(osXsd_ctPointer_t), NULL);
                 pNextCTPointer->pCT = pChildElem->pComplex;
-                osXsd_transverseCT(pNextCTPointer, callback);
+                osXsd_transverseCT(pNextCTPointer, xsdCallback, xmlCallback);
                 osfree(pNextCTPointer);
             }
         }
@@ -2080,6 +2036,37 @@ static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer)
 
 EXIT:
 	return pCT;
+}
+
+
+static void osXsdElemCallback(osXsdElement_t* pXsdElem, osXmlDataCallback_h xmlCallback)
+{
+	if(!pXsdElem)
+	{
+		logError("null pointer, pXsdElem.");
+		return;
+	}
+
+	if(xmlCallback)
+	{
+		if(osXml_isXsdElemXSType(pXsdElem))
+		{
+        	if(pXsdElem->fixed.p && pXsdElem->fixed.l > 0)
+            {
+            	if(xmlCallback)
+                {
+                	xmlCallback(&pXsdElem->elemName, &pXsdElem->fixed, pXsdElem->dataType);
+                }
+            }
+            else if(pXsdElem->elemDefault.p && pXsdElem->elemDefault.l > 0)
+            {
+            	if(xmlCallback)
+                {
+                	xmlCallback(&pXsdElem->elemName, &pXsdElem->elemDefault, pXsdElem->dataType);
+                }
+            }
+		}
+	}
 }
 
 
