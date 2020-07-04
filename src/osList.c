@@ -62,6 +62,18 @@ logError("to-remove, delete, addr=%p, total element=%d", pList, osList_getCount(
 }
 
 
+void osListElement_delete(osListElement_t* pLE)
+{
+	if(!pLE)
+	{
+		return;
+	}
+
+	osfree(pLE->data);
+	osfree(pLE);
+}
+
+
 //besides cleanup pList data structure, delete pList itself
 void osList_free(osList_t* pList)
 {

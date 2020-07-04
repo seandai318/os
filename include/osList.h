@@ -96,6 +96,7 @@ void* osList_getDataByIdx(osList_t* list, int idx);
 uint32_t osList_getCount(const osList_t *list);
 osStatus_e osList_addString(osList_t *pList, char* nameParam, size_t nameLen);
 osListElement_t* osList_getNextElement(osListElement_t* pLE);
+void osListElement_delete(osListElement_t* pLE);
 
 void osListPlus_init(osListPlus_t* pList);
 osStatus_e osListPlus_append(osListPlus_t* pList, void* pData);

@@ -24,7 +24,9 @@ typedef enum {
 typedef enum {
 	OS_XML_DATA_TYPE_INVALID,
 	OS_XML_DATA_TYPE_XS_BOOLEAN,
+	OS_XML_DATA_TYPE_XS_SHORT,
 	OS_XML_DATA_TYPE_XS_INTEGER,
+	OS_XML_DATA_TYPE_XS_LONG,
 	OS_XML_DATA_TYPE_XS_STRING,
 	OS_XML_DATA_TYPE_NO_XS,		//a collective type that represents  all no XS defined type, like simple and complex
 	OS_XML_DATA_TYPE_SIMPLE,
