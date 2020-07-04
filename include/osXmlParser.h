@@ -79,6 +79,7 @@ typedef struct osXmlElement {
 
 osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf);
 osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallback_h callback);
+void osXsd_browseChildNodes(osXsdElement_t* pXsdElem, osXmlDataCallback_h callback);
 
 
 #endif
