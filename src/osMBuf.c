@@ -3,7 +3,10 @@
  *
  * Copyright (C) 2019 InterLogic
  */
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
 #include "osTypes.h"
 #include "osPL.h"
 #include "osMemory.h"
@@ -331,6 +334,47 @@ logError("to-remove, mb->end=%ld, mb->pos=%ld", mb->end,  mb->pos);
 	memcpy(mb->buf + pos, str, strLen);
 }
 	
+
+osMBuf_t* osMBuf_readFile(char* file, size_t initBufSize)
+{
+	osMBuf_t* pBuf = NULL;
+
+	if(!file)
+	{
+		goto EXIT;
+	}
+
+    FILE* fp = fopen(file, "rb");
+	if(!fp)
+	{
+		goto EXIT;
+	}
+
+	pBuf = osMBuf_alloc(initBufSize);
+	if(!pBuf)
+	{
+		goto EXIT;
+	}
+
+    char c;
+    while((pBuf->buf[pBuf->pos]=getc(fp)) != EOF)
+    {
+		if(++pBuf->pos >= pBuf->size)
+		{
+			if(osMBuf_realloc(pBuf, 2*pBuf->size) != 0)
+			{
+				osMBuf_dealloc(pBuf);
+				goto EXIT;
+			}
+		}
+	}
+
+	pBuf->buf[pBuf->pos]='\0';
+
+EXIT:
+	return pBuf;
+}
+
 
 /**
  * Write a block of memory to a memory buffer starting from the current mbuf position
@@ -752,6 +796,7 @@ int osMBuf_readStr(osMBuf_t *mb, char *str, size_t size)
 
 	return 0;
 }
+
 
 
 /**
