@@ -338,13 +338,14 @@ logError("to-remove, mb->end=%ld, mb->pos=%ld", mb->end,  mb->pos);
 osMBuf_t* osMBuf_readFile(char* file, size_t initBufSize)
 {
 	osMBuf_t* pBuf = NULL;
+	FILE* fp = NULL;
 
 	if(!file)
 	{
 		goto EXIT;
 	}
 
-    FILE* fp = fopen(file, "rb");
+    fp = fopen(file, "rb");
 	if(!fp)
 	{
 		goto EXIT;
@@ -356,10 +357,11 @@ osMBuf_t* osMBuf_readFile(char* file, size_t initBufSize)
 		goto EXIT;
 	}
 
-    char c;
-    while((pBuf->buf[pBuf->pos]=getc(fp)) != EOF)
+	char c;
+    while((c = getc(fp)) != EOF)
     {
-		if(++pBuf->pos >= pBuf->size)
+		pBuf->buf[pBuf->pos++] = c;
+		if(pBuf->pos >= pBuf->size)
 		{
 			if(osMBuf_realloc(pBuf, 2*pBuf->size) != 0)
 			{
@@ -370,8 +372,15 @@ osMBuf_t* osMBuf_readFile(char* file, size_t initBufSize)
 	}
 
 	pBuf->buf[pBuf->pos]='\0';
+	pBuf->end = pBuf->pos;
+	pBuf->pos = 0;
 
 EXIT:
+	if(fp)
+	{
+		fclose(fp);
+	}
+
 	return pBuf;
 }
 
