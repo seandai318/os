@@ -2,6 +2,8 @@
 #define _OS_XML_PARSER_H
 
 #include "osList.h"
+#include "osTypes.h"
+#include "osMBuf.h"
 
 
 #define OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM	50
@@ -75,7 +77,7 @@ typedef struct osXmlElement {
 } osXmlElement_t;
 
 
-typedef void (*osXmlDataCallback_h)(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType);
+typedef osStatus_e (*osXmlDataCallback_h)(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType);
 typedef void (*osXsdElemCallback_h)(osXsdElement_t* pXsdElem, osXmlDataCallback_h callback);
 
 

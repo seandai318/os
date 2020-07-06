@@ -224,10 +224,13 @@ EXIT:
 
 void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback)
 {
+	osStatus_e status = OS_STATUS_OK;
+
     if(!pXsdElem || !xsdCallback)
     {
         logError("null pointer, pXsdElem=%p, xsdCallback=%p.", pXsdElem, xsdCallback);
-        return;
+        status = OS_ERROR_NULL_POINTER;
+		return;
     }
 
 	//callback to provide info for each xsdElement.
@@ -309,8 +312,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
 			//parentXsd changes, check the previous parentXsd's elemList to make sure all elements in the list are processed
 			if(((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer != pParentXsdPointer)
 			{
-debug("to-remove-5, pParentXsdPointer=%p, pLE->data)->pParentXsdPointer=%p", pParentXsdPointer, ((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer);
-debug("to-remove-4, pParentXsdPointer.elem=%r", pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
+				debug("case </%r>, old pParentXsdPointer=%p, old xsdElem=%r, new xsdElem=%r, new pParentXsdPointer=%p", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL, pCurXsdElem ? &pCurXsdElem->elemName : NULL, ((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer);
 				//need to move one layer up.  before doing it, check whether there is any min=0, max=0 element, and whether there is mandatory element not in the xml
 				osXmlComplexType_t* pParentCT = osXsdPointer_getCT(pParentXsdPointer);
 				if(!pParentCT)
@@ -389,7 +391,6 @@ debug("to-remove-4, pParentXsdPointer.elem=%r", pParentXsdPointer ? (&pParentXsd
 				}
 						
 				pParentXsdPointer = ((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer;
-debug("to-remove-3, pParentXsdPointer=%p, pParentXsdPointer.elem=%r", pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
 
 			}	//if(((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer != pParentXsdPointer)
 
@@ -422,6 +423,7 @@ debug("to-remove-3, pParentXsdPointer=%p, pParentXsdPointer.elem=%r", pParentXsd
         else if(pElemInfo->isTagDone)
         {
             //case <element_name xxx />, for now we do not process attribute
+			debug("case <%r ... /%r>, do nothing.", &pElemInfo->tag, &pElemInfo->tag);
             if(pParentXsdPointer)
             {
                 if((pXsdPointer->pCurElem = osXml_getChildXsdElemByTag(&pElemInfo->tag, pParentXsdPointer, NULL, &listIdx)) == NULL)
@@ -440,7 +442,7 @@ debug("to-remove-3, pParentXsdPointer=%p, pParentXsdPointer.elem=%r", pParentXsd
 			//case <element_name>
             pXsdPointer = oszalloc(sizeof(osXsd_elemPointer_t), NULL);
 			pXsdPointer->pParentXsdPointer = pParentXsdPointer;
-debug("to-remove-2, pParentXsdPointer=%p, pParentXsdPointer.elem=%r", pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
+			debug("case <%r>, pParentXsdPointer=%p, pParentXsdPointer.elem=%r", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
 
             if(!pParentXsdPointer)
             {
@@ -541,7 +543,7 @@ debug("to-remove-2, pParentXsdPointer=%p, pParentXsdPointer.elem=%r", pParentXsd
 			else
 			{
 				pParentXsdPointer = pXsdPointer;
-debug("to-remove-1, pParentXsdPointer=%p, pParentXsdPointer.elem=%r", pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
+				debug("case <%r>, new pParentXsdPointer=%p, new pParentXsdPointer.elem=%r", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
 			}
 
             osList_append(&xsdElemPointerList, pXsdPointer);

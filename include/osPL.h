@@ -62,6 +62,7 @@ uint32_t osPL_str2u32(const osPointerLen_t *pl);
 osStatus_e osPL_convertStr2u32(const osPointerLen_t *pl, uint32_t* pValue);
 uint32_t osPL_hexstr2u32(const osPointerLen_t *pl);
 uint64_t osPL_str2u64(const osPointerLen_t *pl);
+osStatus_e osPL_convertStr2u64(const osPointerLen_t *pl, uint64_t* pValue);
 uint64_t osPL_hexstr2u64(const osPointerLen_t *pl);
 double osPL_str2float(const osPointerLen_t *pl);
 //modify the digits in pl, the pl->l is not changed
