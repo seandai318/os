@@ -85,8 +85,8 @@ static osStatus_e osXml_parseFirstTag(osMBuf_t* pBuf);
 static osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, bool* isSchemaTagDone);
 static osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue);
 static void osXsdElement_cleanup(void* data);
-static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback);
-static void osXsdElemCallback(osXsdElement_t* pXsdElem, osXmlDataCallback_h xmlCallback);
+static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback, osXmlDataCallbackInfo_t* callbackInfo);
+static void osXsdElemCallback(osXsdElement_t* pXsdElem, osXmlDataCallback_h xmlCallback, osXmlDataCallbackInfo_t* callbackInfo);
 
 static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos);
 static osXmlDataType_e osXml_getElementType(osPointerLen_t* pTypeValue);
@@ -222,7 +222,7 @@ EXIT:
 }
 
 
-void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback)
+void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback, osXmlDataCallbackInfo_t* callbackInfo)
 {
 	osStatus_e status = OS_STATUS_OK;
 
@@ -234,20 +234,20 @@ void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdCallback,
     }
 
 	//callback to provide info for each xsdElement.
-	xsdCallback(pXsdElem, xmlCallback);
+	xsdCallback(pXsdElem, xmlCallback, callbackInfo);
 
 	if(pXsdElem->dataType == OS_XML_DATA_TYPE_COMPLEX)
 	{
     	osXsd_ctPointer_t* pCTPointer = oszalloc(sizeof(osXsd_ctPointer_t), NULL);
     	pCTPointer->pCT = pXsdElem->pComplex;
     	pCTPointer->doneListIdx = 0;
-    	osXsd_transverseCT(pCTPointer, xsdCallback, xmlCallback);
+    	osXsd_transverseCT(pCTPointer, xsdCallback, xmlCallback, callbackInfo);
     	osfree(pCTPointer);
 	}
 }
 
 
-osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallback_h callback)
+osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallback_h callback, osXmlDataCallbackInfo_t* callbackInfo)
 {
     osStatus_e status = OS_STATUS_OK;
     osXmlTagInfo_t* pElemInfo = NULL;
@@ -351,7 +351,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
 								else
 								{
 									//browse the info for xsd that is not configured in the xml file, and do callback if required  
-									osXsd_browseNode(pXsdElem, osXsdElemCallback, callback);
+									osXsd_browseNode(pXsdElem, osXsdElemCallback, callback, callbackInfo);
 								}
 							}
 							else
@@ -407,7 +407,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
                 if(callback)
                 {
                     value.l = tagStartPos - value.l;
-                    callback(&pElemInfo->tag, &value, pCurXsdElem->dataType);
+                    callback(&pElemInfo->tag, &value, pCurXsdElem->dataType, callbackInfo);
                 }
             }
 
@@ -502,7 +502,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
                         		if(pXsdElem->minOccurs == 0)
 								{
                                     //browse the info for xsd that is not configured in the xml file, and do callback if required
-									osXsd_browseNode(pXsdElem, osXsdElemCallback, callback);
+									osXsd_browseNode(pXsdElem, osXsdElemCallback, callback, callbackInfo);
 								}
 								else
 								{
@@ -558,6 +558,138 @@ EXIT:
 	}
     return status;
 }	//osXml_parse
+
+
+
+//get xml leaf node value based on the xsd and xml files
+osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFileName, osXmlDataCallback_h callback, osXmlDataCallbackInfo_t* callbackInfo)
+{
+    osStatus_e status = OS_STATUS_OK;
+    osMBuf_t* xsdMBuf = NULL;
+    osMBuf_t* xmlBuf = NULL;
+    osXsdElement_t* pXsdRoot = NULL;
+
+    if(!xsdFileName || !xmlFileName)
+    {
+        logError("null pointer, xsdFileName=%p, xmlFileName=%p.", xsdFileName, xmlFileName);
+        status = OS_ERROR_NULL_POINTER;
+        goto EXIT;
+    }
+
+    char xsdFile[OS_XML_MAX_FILE_NAME_SIZE];
+    char xmlFile[OS_XML_MAX_FILE_NAME_SIZE];
+
+    if(snprintf(xsdFile, OS_XML_MAX_FILE_NAME_SIZE, "%s/%s", fileFolder ? fileFolder : ".", xsdFileName) >= OS_XML_MAX_FILE_NAME_SIZE)
+    {
+        logError("xsdFile name is truncated.");
+        status = OS_ERROR_INVALID_VALUE;
+    }
+
+    if(snprintf(xmlFile, OS_XML_MAX_FILE_NAME_SIZE, "%s/%s", fileFolder ? fileFolder : ".", xmlFileName) >= OS_XML_MAX_FILE_NAME_SIZE)
+    {
+        logError("xmlFile name is truncated.");
+        status = OS_ERROR_INVALID_VALUE;
+        goto EXIT;
+    }
+
+    xsdMBuf = osMBuf_readFile(xsdFile, 8000);
+    if(!xsdMBuf)
+    {
+        logError("read xsdMBuf fails.");
+        status = OS_ERROR_INVALID_VALUE;
+        goto EXIT;
+    }
+
+    pXsdRoot = osXsd_parse(xsdMBuf);
+    if(!pXsdRoot)
+    {
+        logError("fails to osXsd_parse for xsdMBuf.");
+        status = OS_ERROR_INVALID_VALUE;
+        goto EXIT;
+    }
+
+	//8000 is the initial mBuf size.  If the reading needs more than 8000, the function will realloc new memory
+    xmlBuf = osMBuf_readFile(xmlFile, 8000);
+    if(!xmlBuf)
+    {
+        logError("read xmlBuf fails.");
+        status = OS_ERROR_INVALID_VALUE;
+        goto EXIT;
+    }
+
+    osXml_parse(xmlBuf, pXsdRoot, callback, callbackInfo);
+
+EXIT:
+    osfree(pXsdRoot);
+
+    if(status != OS_STATUS_OK)
+    {
+        osMBuf_dealloc(xsdMBuf);
+        osMBuf_dealloc(xmlBuf);
+    }
+
+    return status;
+}
+
+
+osStatus_e osXml_xmlCallback(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlDataCallbackInfo_t* callbackInfo)
+{
+    osStatus_e status = OS_STATUS_OK;
+
+    if(!elemName || !value || !callbackInfo)
+    {
+        logError("null pointer, elemName=%p, value=%p, callback=%p", elemName, value, callbackInfo);
+        return OS_ERROR_NULL_POINTER;;
+    }
+
+    for(int i=0; i<callbackInfo->maxXmlDataSize; i++)
+    {
+        if(elemName->l < callbackInfo->xmlData[i].dataName.l)
+        {
+            debug("the app does not need element(%r), ignore.", elemName);
+            return status;
+        }
+
+        if(osPL_cmp(elemName, &callbackInfo->xmlData[i].dataName) == 0)
+        {
+            if(dataType != callbackInfo->xmlData[i].dataType)
+            {
+                logError("the element(%r) data type=%d, but the diaConfig expects data type=%d", elemName, dataType, callbackInfo->xmlData[i].dataType);
+                return OS_ERROR_INVALID_VALUE;
+            }
+
+            switch (dataType)
+            {
+                case OS_XML_DATA_TYPE_XS_BOOLEAN:
+                    callbackInfo->xmlData[i].xmlIsTrue = strncmp("true", value->p, value->l) == 0 ? true : false;
+                    logInfo("xmlData[%d].dataName = %r, value=%s", i, elemName, callbackInfo->xmlData[i].xmlIsTrue ? "true" : "false");
+                    break;
+                case OS_XML_DATA_TYPE_XS_SHORT:
+                case OS_XML_DATA_TYPE_XS_INTEGER:
+                case OS_XML_DATA_TYPE_XS_LONG:
+                    status = osPL_convertStr2u64(value, &callbackInfo->xmlData[i].xmlInt);
+                    if(status != OS_STATUS_OK)
+                    {
+                        logError("falis to convert element(%r) value(%r).", elemName, value);
+                        return OS_ERROR_INVALID_VALUE;
+                    }
+                    logInfo("xmlData[%d].dataName = %r, value=%ld", i, elemName, callbackInfo->xmlData[i].xmlInt);
+                    break;
+                case OS_XML_DATA_TYPE_XS_STRING:
+                    callbackInfo->xmlData[i].xmlStr = *value;
+                    logInfo("xmlData[%d].dataName =%r, value= %r", i, elemName, &callbackInfo->xmlData[i].xmlStr);
+                    break;
+                default:
+                    logError("unexpected data type(%d) for element(%r).", dataType, elemName);
+                    return OS_ERROR_INVALID_VALUE;
+                    break;
+            }
+            return status;
+        }
+    }
+
+    return status;
+}
 
 
 static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pTypeList)
@@ -1983,7 +2115,7 @@ EXIT:
 
 
 
-static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback)
+static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback, osXmlDataCallbackInfo_t* callbackInfo)
 {
     if(!pCTPointer || !xsdCallback)
     {
@@ -2001,13 +2133,13 @@ static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXsdElemCallback_
             pCTPointer->doneListIdx++;
             osXsdElement_t* pChildElem = pLE->data;
 
-			xsdCallback(pChildElem, xmlCallback);
+			xsdCallback(pChildElem, xmlCallback, callbackInfo);
 
 			if(!osXml_isXsdElemXSType(pChildElem))
             {
                 osXsd_ctPointer_t* pNextCTPointer = oszalloc(sizeof(osXsd_ctPointer_t), NULL);
                 pNextCTPointer->pCT = pChildElem->pComplex;
-                osXsd_transverseCT(pNextCTPointer, xsdCallback, xmlCallback);
+                osXsd_transverseCT(pNextCTPointer, xsdCallback, xmlCallback, callbackInfo);
                 osfree(pNextCTPointer);
             }
         }
@@ -2041,7 +2173,7 @@ EXIT:
 }
 
 
-static void osXsdElemCallback(osXsdElement_t* pXsdElem, osXmlDataCallback_h xmlCallback)
+static void osXsdElemCallback(osXsdElement_t* pXsdElem, osXmlDataCallback_h xmlCallback, osXmlDataCallbackInfo_t* callbackInfo)
 {
 	if(!pXsdElem)
 	{
@@ -2057,14 +2189,14 @@ static void osXsdElemCallback(osXsdElement_t* pXsdElem, osXmlDataCallback_h xmlC
             {
             	if(xmlCallback)
                 {
-                	xmlCallback(&pXsdElem->elemName, &pXsdElem->fixed, pXsdElem->dataType);
+                	xmlCallback(&pXsdElem->elemName, &pXsdElem->fixed, pXsdElem->dataType, callbackInfo);
                 }
             }
             else if(pXsdElem->elemDefault.p && pXsdElem->elemDefault.l > 0)
             {
             	if(xmlCallback)
                 {
-                	xmlCallback(&pXsdElem->elemName, &pXsdElem->elemDefault, pXsdElem->dataType);
+                	xmlCallback(&pXsdElem->elemName, &pXsdElem->elemDefault, pXsdElem->dataType, callbackInfo);
                 }
             }
 		}

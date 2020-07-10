@@ -12,6 +12,7 @@
 #define OSXML_IS_COMMENT_START(p) (*p=='<' && *(p+1)=='!' && *(p+2)=='-' && *(p+3)=='-')
 #define OSXML_IS_COMMENT_STOP(p) (*p=='>' && *(p-1)=='-' && *(p-2)=='-')
 
+#define OS_XML_MAX_FILE_NAME_SIZE	160		//the maximum xml and xsd file name length
 
 typedef enum {
 	OS_XML_TAG_XS_SCHEMA,
@@ -34,6 +35,18 @@ typedef enum {
 	OS_XML_DATA_TYPE_SIMPLE,
 	OS_XML_DATA_TYPE_COMPLEX,
 } osXmlDataType_e;
+
+
+typedef struct {
+    int eDataName;          //different app use different enum, like sipConfig_xmlDataName_e, diaConfig_xmlDataName_e, etc.
+    osPointerLen_t dataName;
+    osXmlDataType_e dataType;
+    union {
+        bool xmlIsTrue;
+        uint64_t xmlInt;
+        osPointerLen_t xmlStr;
+    };
+} osXmlData_t;
 
 
 typedef enum {
@@ -65,25 +78,27 @@ typedef struct osXsdElement {
 } osXsdElement_t;
 
 
-typedef struct osXmlElement {
-	osPointerLen_t name;
-	osList_t* pChild;
-    osXmlDataType_e dataType;	//if DataType != XS type, pChild=NULL, there is corresponding data inside union, otherwise, pChild != NULL, but there is no data inside union.
-    union {
-        bool isTrue;			//boolean
-        int intValue;			//integer
-        osPointerLen_t string;	//string
-    };
-} osXmlElement_t;
+
+//app provided info for osXmlDataCallback_h callback
+typedef struct {
+	osXmlData_t* xmlData;
+	int maxXmlDataSize;
+} osXmlDataCallbackInfo_t;
 
 
-typedef osStatus_e (*osXmlDataCallback_h)(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType);
-typedef void (*osXsdElemCallback_h)(osXsdElement_t* pXsdElem, osXmlDataCallback_h callback);
+//callback function to provide xml element value to the application
+typedef osStatus_e (*osXmlDataCallback_h)(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlDataCallbackInfo_t* callbackInfo);
+
+typedef void (*osXsdElemCallback_h)(osXsdElement_t* pXsdElem, osXmlDataCallback_h callback, osXmlDataCallbackInfo_t* callbackInfo);
 
 
 osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf);
-osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallback_h callback);
-void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdElemCallback, osXmlDataCallback_h callback);
+osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallback_h callback, osXmlDataCallbackInfo_t* callbackInfo);
+//get xml leaf node value based on the xsd and xml files
+osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFileName, osXmlDataCallback_h callback, osXmlDataCallbackInfo_t* callbackInfo);
+//generic xml callback implementation.  app can chose to use this one or provide its own callback function, depending on the needs
+osStatus_e osXml_xmlCallback(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlDataCallbackInfo_t* callbackInfo);
+void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdElemCallback, osXmlDataCallback_h callback, osXmlDataCallbackInfo_t* callbackInfo);
 
 
 #endif

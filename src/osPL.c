@@ -819,6 +819,18 @@ void osVPL_setStr(osVPointerLen_t *pl, const char *str, size_t len, bool isPDyna
 }
 
 
+void osVPL_setPL(osVPointerLen_t *pl, const osPointerLen_t* origPl, bool isPDynamic)
+{
+	if(!pl || !origPl)
+	{
+		return;
+	}
+
+	pl->pl = *origPl;
+	pl->isPDynamic = isPDynamic;
+}
+
+
 void osVPL_free(osVPointerLen_t* vpl)
 {
 	if(!vpl)

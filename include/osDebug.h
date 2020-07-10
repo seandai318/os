@@ -8,8 +8,10 @@
 #ifndef _OS_DEBUG_H
 #define _OS_DEBUG_H
 
+#include <libgen.h>
 #include <time.h>
 #include <stdio.h>
+
 #include "osTypes.h"
 
 
@@ -37,6 +39,15 @@ typedef enum {
 } osLogModule_e;
 
 
+
+//note: filename is used here.  According to basename() man page, it may not be safe to pass in __FILE__directly here.  
+//People suggest to take a copy of __FILE__ and do basename() on it, like char* filename = strdup(__FILE__); ... free(filename), 
+//or even a simpler way: char filename[]=__FILE__;  I also see there is a propsal to provide a compile time macro for the basename, 
+//like __FILE_BASENAME__, but it is not in the current gcc now.  when it is available, we will remove basename() to use the new one. 
+//
+//POSIX basename() man:
+//The basename() function may modify the string pointed to by path, and may return a pointer to internal storage. The returned pointer 
+//might be invalidated or the storage might be overwritten by a subsequent call to basename().
 #define logEmerg(...) \
 do {\
 	struct timespec tp; \
@@ -44,7 +55,8 @@ do {\
 	clock_gettime(CLOCK_REALTIME, &tp); \
 	gmtime_r(&tp.tv_sec, &d); \
 	char dstr[200];  \
-	sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Emergency] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+	char filename[]=__FILE__;	\
+	sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Emergency] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
 	osDbg_printf(DBG_EMERG, dstr); \
 	osDbg_printf(DBG_EMERG, __VA_ARGS__);\
 	osDbg_printf(DBG_EMERG, "\n");\
@@ -59,7 +71,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Alert] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Alert] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_ALERT, dstr); \
     osDbg_printf(DBG_ALERT, __VA_ARGS__);\
 	osDbg_printf(DBG_ALERT, "\n");\
@@ -75,7 +88,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Critical] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Critical] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_CRIT, dstr); \
     osDbg_printf(DBG_CRIT, __VA_ARGS__);\
     osDbg_printf(DBG_CRIT, "\n");\
@@ -91,7 +105,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Error] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Error] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_ERROR, dstr); \
     osDbg_printf(DBG_ERROR, __VA_ARGS__);\
     osDbg_printf(DBG_ERROR, "\n");\
@@ -107,7 +122,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Warning] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Warning] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_WARNING, dstr); \
     osDbg_printf(DBG_WARNING, __VA_ARGS__);\
     osDbg_printf(DBG_WARNING, "\n");\
@@ -123,7 +139,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Notice] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Notice] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_NOTICE, dstr); \
     osDbg_printf(DBG_NOTICE, __VA_ARGS__);\
     osDbg_printf(DBG_NOTICE, "\n");\
@@ -139,7 +156,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Info] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Info] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_INFO, dstr); \
     osDbg_printf(DBG_INFO, __VA_ARGS__);\
     osDbg_printf(DBG_INFO, "\n");\
@@ -155,7 +173,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_DEBUG, dstr); \
     osDbg_printf(DBG_DEBUG, __VA_ARGS__);\
     osDbg_printf(DBG_DEBUG, "\n");\
@@ -177,7 +196,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Alert] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Alert] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_ALERT, dstr); \
     osDbg_printf(DBG_ALERT, __VA_ARGS__);\
     osDbg_printf(DBG_ALERT, "\n");\
@@ -193,7 +213,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Critical] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Critical] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_CRIT, dstr); \
     osDbg_printf(DBG_CRIT, __VA_ARGS__);\
     osDbg_printf(DBG_CRIT, "\n");\
@@ -209,7 +230,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Error] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Error] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_ERROR, dstr); \
     osDbg_printf(DBG_ERROR, __VA_ARGS__);\
     osDbg_printf(DBG_ERROR, "\n");\
@@ -225,7 +247,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Warning] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Warning] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_WARNING, dstr); \
     osDbg_printf(DBG_WARNING, __VA_ARGS__);\
     osDbg_printf(DBG_WARNING, "\n");\
@@ -241,7 +264,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Notice] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Notice] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_NOTICE, dstr); \
     osDbg_printf(DBG_NOTICE, __VA_ARGS__);\
     osDbg_printf(DBG_NOTICE, "\n");\
@@ -257,7 +281,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Info] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d, Info] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_INFO, dstr); \
     osDbg_printf(DBG_INFO, __VA_ARGS__);\
     osDbg_printf(DBG_INFO, "\n");\
@@ -273,7 +298,8 @@ do {\
     clock_gettime(CLOCK_REALTIME, &tp); \
     gmtime_r(&tp.tv_sec, &d); \
     char dstr[200];  \
-    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, __FILE__, __func__, __LINE__);  \
+    char filename[]=__FILE__;   \
+    sprintf(dstr, "%d/%02d/%02d %02d:%02d:%02d.%6ld[%s:%s:%d] ", d.tm_year+1900, d.tm_mon+1, d.tm_mday, d.tm_hour, d.tm_min, d.tm_sec, tp.tv_nsec/1000, filename, __func__, __LINE__);  \
     osDbg_printf(DBG_DEBUG, dstr); \
     osDbg_printf(DBG_DEBUG, __VA_ARGS__);\
     osDbg_printf(DBG_DEBUG, "\n");\
