@@ -717,7 +717,7 @@ void osList_orderAppend(osList_t *list, osListSortHandler sortHandler, void* dat
 
 
 
-void osListPlus_init(osListPlus_t* pList)
+void osListPlus_init(osListPlus_t* pList, bool isDataStatic)
 {
 	if(!pList)
 	{
@@ -725,6 +725,7 @@ void osListPlus_init(osListPlus_t* pList)
 	}
 
 	pList->num = 0;
+	pList->isDataStatic = isDataStatic;
 	pList->first = NULL;
 	osList_init(&pList->more);
 }
@@ -784,9 +785,30 @@ void osListPlus_delete(osListPlus_t* pList)
         return;
     }
 
-	osfree(pList->first);
-	osList_delete(&pList->more);
+	if(pList->isDataStatic)
+	{
+        osList_clear(&pList->more);
+	}
+	else
+	{
+		osfree(pList->first);
+		osList_delete(&pList->more);
+	}
+
 	pList->first = NULL;
+	pList->isDataStatic = false;
+}
+
+
+void osListPlus_free(osListPlus_t* pList)
+{
+    if(!pList)
+    {
+        return;
+    }
+
+	osListPlus_delete(pList);
+	osfree(pList);
 }
 	
 

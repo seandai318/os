@@ -32,6 +32,7 @@ typedef struct osList {
 
 typedef struct {
     size_t num;
+	bool isDataStatic;		//if true, the list element data is static or owned by other module, no need to dealloc after the osList is used, otherwise, the data needs to be freed after the list use
     void* first;
     osList_t more;
 } osListPlus_t;
@@ -98,11 +99,11 @@ osStatus_e osList_addString(osList_t *pList, char* nameParam, size_t nameLen);
 osListElement_t* osList_getNextElement(osListElement_t* pLE);
 void osListElement_delete(osListElement_t* pLE);
 
-void osListPlus_init(osListPlus_t* pList);
+void osListPlus_init(osListPlus_t* pList, bool isDataStatic);
 osStatus_e osListPlus_append(osListPlus_t* pList, void* pData);
 void osListPlus_clear(osListPlus_t* pList);
 void osListPlus_delete(osListPlus_t* pList);
-
+void osListPlus_free(osListPlus_t* pList);
 
 
 /**
