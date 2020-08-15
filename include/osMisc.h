@@ -1,3 +1,6 @@
+/* Copyright 2019, 2020, Sean Dai
+ */
+
 #ifndef _OS_MISC_H
 #define _OS_MISC_H
 
@@ -14,6 +17,13 @@ typedef enum {
 	OS_INT_TYPE_U32,
     OS_INT_TYPE_U64,
 } osIntType_e;
+
+
+//for the next hop distribution, when distribution module is ready, move there
+typedef enum {
+    OS_NODE_SELECT_MODE_ROUND_ROBIN,
+    OS_NODE_SELECT_MODE_PRIORITY,
+} osNodeSelMode_e;
 
 
 int osMinInt(int a, int b);

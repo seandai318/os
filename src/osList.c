@@ -1,8 +1,8 @@
- /* @file list.c  Double Linked List implementation, with a header pointer and a tail pointer, 
- *               each element also points to the list head 
- *
- * Copyright (C) 2019, InterLogic 
+/* Copyright 2019, 2020, Sean Dai
+ * Double Linked List implementation, with a header pointer and a tail pointer, 
+ * each element also points to the list head 
  */
+
 #include "osTypes.h"
 #include "osList.h"
 #include "osMemory.h"
@@ -87,7 +87,7 @@ void osList_free(osList_t* pList)
 }
 
 
-//to to used when a list object is created via dynamic memory allocation, as a cleanup function for osfree.
+//to be used when a list object is created via dynamic memory allocation, as a cleanup function for osfree.
 void osList_cleanup(void* pData)
 {
 	osList_delete(pData);

@@ -1,8 +1,7 @@
-/**
- * @file osHashKey.c  Hashmap functions
- *
- * Copyright (C) 2019 InterLogic
+/* Copyright 2019, 2020, Sean Dai
+ * Hashmap functions
  */
+
 #include <ctype.h>
 #include <string.h>
 #include "osTypes.h"
@@ -39,6 +38,33 @@ uint32_t osHashGetKey(const uint8_t *key, size_t len)
 }
 
 
+uint32_t osHashGetKey_extraKey(const uint8_t *key, size_t len, uint8_t extraKey)
+{
+    uint32_t hash = 0;
+    size_t i;
+
+    for (i = 0; i < len+1; i++)
+    {
+		if(i == len)
+		{
+	        hash += extraKey;
+		}
+		else
+		{
+        	hash += key[i];
+		}
+        hash += (hash << 10);
+        hash ^= (hash >> 6);
+    }
+
+    hash += (hash << 3);
+    hash ^= (hash >> 11);
+    hash += (hash << 15);
+
+    return hash;
+}
+
+
 /**
  * Calculate hash-value for a case-insensitive string
  *
@@ -67,6 +93,32 @@ uint32_t osHashGetKey_ci(const char *str, size_t len)
 }
 
 
+uint32_t osHashGetKey_ci_extraKey(const char *str, size_t len, uint8_t extraKey)
+{
+    uint32_t hash = 0;
+    size_t i;
+
+    for (i = 0; i < len+1; i++)
+    {
+		if(i == len)
+		{
+			 hash += extraKey;
+        }
+        else
+        {
+        	hash += tolower(str[i]);
+		}
+        hash += (hash << 10);
+        hash ^= (hash >> 6);
+    }
+
+    hash += (hash << 3);
+    hash ^= (hash >> 11);
+    hash += (hash << 15);
+
+    return hash;
+}
+
 /**
  * Calculate hash-value for a NULL-terminated string
  *
@@ -77,22 +129,12 @@ uint32_t osHashGetKey_ci(const char *str, size_t len)
 uint32_t osHashGetKey_str(const char *str)
 {
 	return osHashGetKey((const uint8_t *)str, strlen(str));
-/*
-	uint32_t hash = 0;
+}
 
-	while (*str)
-	{
-		hash += *str++;
-		hash += (hash << 10);
-		hash ^= (hash >> 6);
-	}
 
-	hash += (hash << 3);
-	hash ^= (hash >> 11);
-	hash += (hash << 15);
-
-	return hash;
-*/
+uint32_t osHashGetKey_str_extraKey(const char *str, uint8_t extraKey)
+{
+    return osHashGetKey_extraKey((const uint8_t *)str, strlen(str), extraKey);
 }
 
 
@@ -106,20 +148,12 @@ uint32_t osHashGetKey_str(const char *str)
 uint32_t osHashGetKey_strCI(const char *str)
 {
 	return osHashGetKey_ci(str, strlen(str));
-/*
-	uint32_t hash = 0;
+}
 
-	while (*str) {
-		hash += tolower(*str++);
-		hash += (hash << 10);
-		hash ^= (hash >> 6);
-	}
-	hash += (hash << 3);
-	hash ^= (hash >> 11);
-	hash += (hash << 15);
 
-	return hash;
-*/
+uint32_t osHashGetKey_strCI_extraKey(const char *str, uint8_t extraKey)
+{
+    return osHashGetKey_ci_extraKey(str, strlen(str), extraKey);
 }
 
 
@@ -136,6 +170,12 @@ uint32_t osHashGetKey_pl(const osPointerLen_t *pl)
 }
 
 
+uint32_t osHashGetKey_pl_extraKey(const osPointerLen_t *pl, uint8_t extraKey)
+{
+    return pl ? osHashGetKey_extraKey((const uint8_t *)pl->p, pl->l, extraKey) : 0;
+}
+
+
 /**
  * Calculate hash-value for a case-insensitive pointer-length object
  *
@@ -146,6 +186,12 @@ uint32_t osHashGetKey_pl(const osPointerLen_t *pl)
 uint32_t osHashGetKey_plCI(const osPointerLen_t *pl)
 {
 	return pl ? osHashGetKey_ci(pl->p, pl->l) : 0;
+}
+
+
+uint32_t osHashGetKey_plCI_extraKey(const osPointerLen_t *pl, uint8_t extraKey)
+{
+    return pl ? osHashGetKey_ci_extraKey(pl->p, pl->l, extraKey) : 0;
 }
 
 

@@ -1,6 +1,6 @@
 /**
  * @file osHash.c  Hashmap table
- * Copyright (C) 2019, InterLogic
+ * Copyright (C) 2019, 2020, Sean Dai
  */
 
 #include <string.h>
@@ -247,7 +247,7 @@ osListElement_t* osHash_addElement(osHash_t *h, uint32_t key, void *data, osList
  *
  * @param le     List element
  */
-void osHash_deleteNode(osListElement_t* pHashElement)
+void osHash_deleteNode(osListElement_t* pHashElement, osHashDelNodeType_e delType)
 {
 	if(!pHashElement)
 	{
@@ -268,18 +268,35 @@ void osHash_deleteNode(osListElement_t* pHashElement)
     osList_unlinkElement(pHashElement);
 
     pthread_mutex_unlock(pMutex);
+
+    switch(delType)
+    {
+        case OS_HASH_DEL_NODE_TYPE_ALL:
+			osfree(((osHashData_t*)pHashElement->data)->pData);
+            osfree(pHashElement->data);
+            osfree(pHashElement);
+            break;
+        case OS_HASH_DEL_NODE_TYPE_KEEP_USER_DATA:
+			osfree(pHashElement->data);
+            osfree(pHashElement);
+            break;
+		case OS_HASH_DEL_NODE_TYPE_KEEP_HASH_DATA:
+			osfree(pHashElement);
+        default:
+            break;
+    }
 }
 
 
-void osHash_deleteNodeByKey1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg)
+void osHash_deleteNodeByKey1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg, osHashDelNodeType_e delType)
 {
 	osListElement_t* pHE = osHash_lookup1(h, key, ah, arg);
 
-	osHash_deleteNode(pHE);
+	osHash_deleteNode(pHE, delType);
 }
 
 
-void osHash_deleteNodeByKey(const osHash_t *h, osHashData_t* pHashData)
+void osHash_deleteNodeByKey(const osHash_t *h, osHashData_t* pHashData, osHashDelNodeType_e delType)
 {
     if(!h || !pHashData)
     {
@@ -304,13 +321,31 @@ void osHash_deleteNodeByKey(const osHash_t *h, osHashData_t* pHashData)
             return;
     }
 
+	osListElement_t* pLE = NULL;
     pthread_mutex_lock(&h->bucket[hashKey & (h->bsize-1)].bucketMutex);
 
-    osListElement_t* pLE = osList_lookup(&h->bucket[hashKey & (h->bsize-1)].bucketList, true, osHashCompare, pHashData);
+    pLE = osList_lookup(&h->bucket[hashKey & (h->bsize-1)].bucketList, true, osHashCompare, pHashData);
 
     osList_unlinkElement(pLE);
 
     pthread_mutex_unlock(&h->bucket[hashKey & (h->bsize-1)].bucketMutex);
+
+    switch(delType)
+    {
+        case OS_HASH_DEL_NODE_TYPE_ALL:
+            osfree(((osHashData_t*)pLE->data)->pData);
+            osfree(pLE->data);
+            osfree(pLE);
+            break;
+        case OS_HASH_DEL_NODE_TYPE_KEEP_USER_DATA:
+            osfree(pLE->data);
+            osfree(pLE);
+            break;
+        case OS_HASH_DEL_NODE_TYPE_KEEP_HASH_DATA:
+            osfree(pLE);
+        default:
+            break;
+    }
 }
 
 
@@ -550,6 +585,39 @@ uint32_t osHash_getKeyPL(const osPointerLen_t* pPL, bool isCase)
     }
 
 	return hashKey;
+}
+
+
+uint32_t osHash_getKeyPL_extraKey(const osPointerLen_t* pPL, bool isCase, uint8_t extraKey)
+{
+    uint32_t hashKey = 0;
+    if (isCase)
+    {
+        hashKey = osHashGetKey_pl_extraKey(pPL, extraKey);
+    }
+    else
+    {
+        hashKey = osHashGetKey_plCI_extraKey(pPL, extraKey);
+    }
+
+    return hashKey;
+}
+
+
+uint32_t osHash_getKeyStr_extraKey(const char* pStr, bool isCase, uint8_t extraKey)
+{
+	osPointerLen_t pl = {pStr, strlen(pStr)};
+    uint32_t hashKey = 0;
+    if (isCase)
+    {
+        hashKey = osHashGetKey_pl_extraKey(&pl, extraKey);
+    }
+    else
+    {
+        hashKey = osHashGetKey_plCI_extraKey(&pl, extraKey);
+    }
+
+    return hashKey;
 }
 
 

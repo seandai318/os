@@ -1,7 +1,5 @@
-/**
- * @file osHash.h  Interface to hashmap table
- *
- * Copyright (C) 2019, InterLogic
+/* Copyright (C) 2019, 2020, Sean Dai
+ * Interface to hashmap table
  */
 
 
@@ -48,6 +46,14 @@ typedef struct osHashData {
 } osHashData_t;
 
 
+//there are three memory allocation for a hash node, list_element as a hash node (osListElement_t), hashData(osHashData_t), and osHashData_t.pData (user data).
+typedef enum {
+	OS_HASH_DEL_NODE_TYPE_ALL,				//remove node from Hash, and free all memory
+	OS_HASH_DEL_NODE_TYPE_KEEP_USER_DATA,	//remove node from Hash, free osListElement_t and osHashData_t, keep the user data
+	OS_HASH_DEL_NODE_TYPE_KEEP_HASH_DATA,	//remove node from Hash only, free osListElement_t
+	OS_HASH_DEL_NODE_TYPE_NONE,				//remove node from Hash only, do not free any memory
+} osHashDelNodeType_e;
+
 osHash_t* osHash_create(uint32_t bsize);
 osListElement_t* osHash_add(osHash_t *h,  osHashData_t* pHashData);
 osListElement_t* osHash_lookupByKey(const osHash_t *h, void* key, osHashKeyType_e keyType);
@@ -55,10 +61,14 @@ osListElement_t* osHash_addStrkey(osHash_t *h, const char* str, size_t len, bool
 osListElement_t* osHash_addKey(osHash_t *h, uint32_t key, void *data);
 osListElement_t* osHash_addPLkey(osHash_t *h, const osPointerLen_t* pPL, bool isCaseSensitive, void *data);
 osListElement_t* osHash_addElement(osHash_t *h, uint32_t key, void *data, osListElement_t* pHashElement);
-void osHash_deleteNode(osListElement_t* pHashElement);
-void osHash_deleteNodeByKey1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg);
-void osHash_deleteNodeByKey(const osHash_t *h, osHashData_t* pHashData);
+void osHash_deleteNode(osListElement_t* pHashElement, osHashDelNodeType_e delType);
+void osHash_deleteNodeByKey1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg, osHashDelNodeType_e delType);
+void osHash_deleteNodeByKey(const osHash_t *h, osHashData_t* pHashData, osHashDelNodeType_e delType);
 uint32_t osHash_getKeyPL(const osPointerLen_t* pPL,bool isCase);
+//get hash key for two input keys, one is PL, one is unit8_t
+uint32_t osHash_getKeyPL_extraKey(const osPointerLen_t* pPL, bool isCase, uint8_t extraKey);
+//pStr is null terminated string
+uint32_t osHash_getKeyStr_extraKey(const char* pStr, bool isCase, uint8_t extraKey);
 //osListElement_t* osHash_lookup1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg);
 osListElement_t* osHash_lookup(const osHash_t *h, osHashData_t* pHashData);
 osListElement_t* osHash_lookup1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg);
