@@ -5,7 +5,7 @@
 #include "osSockAddr.h"
 
 
-osStatus_e osConvertPLton(osIpPort_t* pIpPort, bool isIncludePort, struct sockaddr_in* pSockAddr)
+osStatus_e osConvertPLton(const osIpPort_t* pIpPort, bool isIncludePort, struct sockaddr_in* pSockAddr)
 {
     osStatus_e status = OS_STATUS_OK;
     char ip[INET_ADDRSTRLEN]={};
