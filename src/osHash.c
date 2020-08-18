@@ -621,6 +621,30 @@ uint32_t osHash_getKeyStr_extraKey(const char* pStr, bool isCase, uint8_t extraK
 }
 
 
+uint32_t osHash_getKeyU8(const uint8_t keyInput)
+{
+	return osHashGetKey(&keyInput, 1);
+}
+
+
+uint32_t osHash_getKeyU16(const uint16_t keyInput)
+{
+	return osHashGetKey((const uint8_t*)&keyInput, 2);
+}
+
+
+uint32_t osHash_getKeyU32(const uint32_t keyInput)
+{
+    return osHashGetKey((const uint8_t*)&keyInput, 4);
+}
+
+
+uint32_t osHash_getKeyU64(const uint64_t keyInput)
+{
+    return osHashGetKey((const uint8_t*)&keyInput, 8);
+}
+
+
 void* osHash_getData(osListElement_t* pHashLE)
 {
 	if(!pHashLE)

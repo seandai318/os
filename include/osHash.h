@@ -69,6 +69,10 @@ uint32_t osHash_getKeyPL(const osPointerLen_t* pPL,bool isCase);
 uint32_t osHash_getKeyPL_extraKey(const osPointerLen_t* pPL, bool isCase, uint8_t extraKey);
 //pStr is null terminated string
 uint32_t osHash_getKeyStr_extraKey(const char* pStr, bool isCase, uint8_t extraKey);
+uint32_t osHash_getKeyU8(const uint8_t keyInput);
+uint32_t osHash_getKeyU16(const uint16_t keyInput);
+uint32_t osHash_getKeyU32(const uint32_t keyInput);
+uint32_t osHash_getKeyU64(const uint64_t keyInput);
 //osListElement_t* osHash_lookup1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg);
 osListElement_t* osHash_lookup(const osHash_t *h, osHashData_t* pHashData);
 osListElement_t* osHash_lookup1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg);

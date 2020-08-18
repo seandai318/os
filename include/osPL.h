@@ -37,7 +37,7 @@ typedef struct osDPointerLen {
 } osDPointerLen_t;
 
 
-
+//if passing this variable to another function, expect the receiving function to free the memmory.  If there is a interruption between creating of this data structure to the freeing of this data structure (for example, pass this data structure to a function, the receiving function stores it, then after receiving something from network, free this data structure), this data structure has to be either created dymanically or is a global variable
 typedef struct osVPointerLen {
 	osPointerLen_t pl;
 	bool isPDynamic;	//if isPDynamic = true, pl.p is dynamic allocated, after using the data structure, pl.p shall be freed
