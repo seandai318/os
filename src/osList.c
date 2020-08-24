@@ -384,6 +384,33 @@ void* osList_deleteElement(osList_t* pList, osListApply_h applyHandler, void *ar
 }
 
 
+//each element contains a data structure pointer, the input arg is the address of the data structure, i.e., pointer
+void* osList_deletePtrElement(osList_t* pList, void*arg)
+{
+	if(!pList || !arg)
+	{
+		return NULL;
+	}
+
+	osListElement_t* pLE = pList->head;
+	void* pData = NULL;
+	while(pLE)
+	{
+		if(pLE->data = arg)
+		{ 
+			pData = pLE->data;
+			osList_unlinkElement(pLE);
+			osfree(pLE);
+			break;
+		}
+	
+		pLE = pLE->next;
+	}
+
+	return pData;
+}
+
+
 void osList_deleteElementAll(osListElement_t* pLE)
 {
 	if(!pLE)
@@ -449,39 +476,6 @@ void osList_sort(osList_t *list, osListSortHandler sortHandler, void *arg)
 	goto retry;
 }
 
-#if 0
-void osList_sort(osList_t *list, osListSortHandler sortHandler, void *arg)
-{
-    osListElement_t *le;
-    bool sort;
-
-    if (!list || !sortHandler)
-        return;
-
- retry:
-    le = list->head;
-    sort = false;
-
-    while (le && le->next) {
-
-        if (sortHandler(le, le->next, arg)) {
-
-            le = le->next;
-        }
-        else {
-            osListElement_t *tle = le->next;
-
-            osList_unlinkElement(le);
-            osList_insertAfter(list, tle, le, le->data);
-            sort = true;
-        }
-    }
-
-    if (sort) {
-        goto retry;
-    }
-}
-#endif
 
 /**
  * Find the firat matching element in a linked list

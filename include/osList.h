@@ -85,6 +85,8 @@ void osList_orderAppend(osList_t *list, osListSortHandler sortHandler, void* dat
 void osList_unlinkElement(osListElement_t *le);
 //delete a element based on the stored data.
 void* osList_deleteElement(osList_t* pList, osListApply_h applyHandler, void *arg);
+//each element contains a data structure pointer, the input arg is the address of the data structure, i.e., pointer
+void* osList_deletePtrElement(osList_t* pList, void*arg);
 //delete a element by element address, the data pointed by the element is also deleted.
 void osList_deleteElementAll(osListElement_t* pLE);
 void osList_sort(osList_t *list, osListSortHandler sortHandler, void *arg);
@@ -125,7 +127,7 @@ static inline bool list_contains(const osList_t *list, const osListElement_t *le
 }
 
 
-static inline bool list_isempty(const osList_t *list)
+static inline bool osList_isEmpty(const osList_t *list)
 {
 	return list ? list->head == NULL : true;
 }
