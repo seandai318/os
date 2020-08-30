@@ -24,6 +24,8 @@
 
 
 typedef void (*timeoutCallBackFunc_t)(uint64_t timerId, void* ptr);
+//function to be called after timer is ready
+typedef void (*timerReadyFunc_h)();
 
 typedef struct osTimerInfo {
 	uint32_t nextTimeout;		//msec, for tick, if one time timeout, this value shall be set to 0
@@ -62,7 +64,7 @@ typedef struct osTimerChainNode {
 
 int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeoutCallBackFunc_t callBackFunc);
 int osTimerModuleInit(int* timerWriteFd);
-int osTimerGetMsg(osInterface_e intf, void* pMsg);
+int osTimerGetMsg(osInterface_e intf, void* pMsg, timerReadyFunc_h timerReady);
 uint64_t osStartTimer(time_t msec, timeoutCallBackFunc_t callback, void* pData);
 uint64_t osvStartTimer(time_t msec, timeoutCallBackFunc_t callback, void* pData, char* info);
 uint64_t osStartTick(time_t msec, timeoutCallBackFunc_t callback, void* pData);

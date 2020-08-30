@@ -91,7 +91,7 @@ int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeou
 }
 
 
-int osTimerGetMsg(osInterface_e intf, void* pMsg)
+int osTimerGetMsg(osInterface_e intf, void* pMsg, timerReadyFunc_h timerReadyFunc)
 {
 	int status = 0;
 
@@ -116,6 +116,10 @@ int osTimerGetMsg(osInterface_e intf, void* pMsg)
 					le = le->next;
 				}
 				osList_delete(&tickList);
+				if(timerReadyFunc)
+				{
+					timerReadyFunc();
+				}
 			}
 			else
 			{
