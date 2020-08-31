@@ -36,6 +36,7 @@ typedef enum {
 	LM_SIPTR,		//SIP Transaction
 	LM_TRANSPORT,	//SIP Transportation
 	LM_SIPAPP,		//SIP Application
+	LM_XMLP,		//XML parser
 	LM_ALL,			//All modules
 } osLogModule_e;
 

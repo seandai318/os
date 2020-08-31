@@ -1,4 +1,4 @@
-/* copyright seandai 2020
+/* Copyright 2020 Sean Dai
  * xsd and xml parser, support the following xml format:
  * xs:boolean, xs:short, xs:integer, xs:long, xs:string, xs:complex
  * validate the xml against xsd.  If a call back is provided, the leaf information of all xml leave elements will be provided via the callback
@@ -109,7 +109,7 @@ static void tempPrint(osList_t* pList, int i)
     while(pLE1)
     {
         osXmlComplexType_t* pCT=pLE1->data;
-        debug("to-remove-%d, pCT=%p, list count=%d, typeName=%r", i, pCT, osList_getCount(&pCT->elemList), &pCT->typeName);
+        mdebug(LM_XMLP, "to-remove-%d, pCT=%p, list count=%d, typeName=%r", i, pCT, osList_getCount(&pCT->elemList), &pCT->typeName);
         pLE1 = pLE1->next;
     }
 }
@@ -192,7 +192,7 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
 		
 		if(isEndSchemaTag)
 		{
-			logInfo("xsd parse is completed.");
+			mlogInfo(LM_XMLP, "xsd parse is completed.");
 			break;
 		}
 	}
@@ -312,7 +312,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
 			//parentXsd changes, check the previous parentXsd's elemList to make sure all elements in the list are processed
 			if(((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer != pParentXsdPointer)
 			{
-				debug("case </%r>, old pParentXsdPointer=%p, old xsdElem=%r, new xsdElem=%r, new pParentXsdPointer=%p", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL, pCurXsdElem ? &pCurXsdElem->elemName : NULL, ((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer);
+				mdebug(LM_XMLP, "case </%r>, old pParentXsdPointer=%p, old xsdElem=%r, new xsdElem=%r, new pParentXsdPointer=%p", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL, pCurXsdElem ? &pCurXsdElem->elemName : NULL, ((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer);
 				//need to move one layer up.  before doing it, check whether there is any min=0, max=0 element, and whether there is mandatory element not in the xml
 				osXmlComplexType_t* pParentCT = osXsdPointer_getCT(pParentXsdPointer);
 				if(!pParentCT)
@@ -414,7 +414,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
 			//end of file check
 			if(osPL_cmp(&pElemInfo->tag, &pXsdRootElem->elemName) == 0)
 			{
-				logInfo("xml parse is completed.");
+				mlogInfo(LM_XMLP, "xml parse is completed.");
 				isXmlParseDone = true; 
 			}
 
@@ -423,7 +423,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
         else if(pElemInfo->isTagDone)
         {
             //case <element_name xxx />, for now we do not process attribute
-			debug("case <%r ... /%r>, do nothing.", &pElemInfo->tag, &pElemInfo->tag);
+			mdebug(LM_XMLP, "case <%r ... /%r>, do nothing.", &pElemInfo->tag, &pElemInfo->tag);
             if(pParentXsdPointer)
             {
                 if((pXsdPointer->pCurElem = osXml_getChildXsdElemByTag(&pElemInfo->tag, pParentXsdPointer, NULL, &listIdx)) == NULL)
@@ -442,7 +442,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
 			//case <element_name>
             pXsdPointer = oszalloc(sizeof(osXsd_elemPointer_t), NULL);
 			pXsdPointer->pParentXsdPointer = pParentXsdPointer;
-			debug("case <%r>, pParentXsdPointer=%p, pParentXsdPointer.elem=%r", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
+			mdebug(LM_XMLP, "case <%r>, pParentXsdPointer=%p, pParentXsdPointer.elem=%r", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
 
             if(!pParentXsdPointer)
             {
@@ -525,7 +525,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
 				}
 				//check the maximum element occurrence is not exceeded
 				++pParentXsdPointer->assignedChildIdx[listIdx];
-				debug("pParentXsdPointer->assignedChildIdx[%d]=%d", listIdx, pParentXsdPointer->assignedChildIdx[listIdx]);
+				mdebug(LM_XMLP, "pParentXsdPointer->assignedChildIdx[%d]=%d", listIdx, pParentXsdPointer->assignedChildIdx[listIdx]);
 				if(pXsdPointer->pCurElem->maxOccurs != -1 && pParentXsdPointer->assignedChildIdx[listIdx] > pXsdPointer->pCurElem->maxOccurs)
 				{
 					logError("the element(%r) exceeds the maxOccurs(%d).", &pXsdPointer->pCurElem->elemName, pXsdPointer->pCurElem->maxOccurs);
@@ -543,7 +543,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
 			else
 			{
 				pParentXsdPointer = pXsdPointer;
-				debug("case <%r>, new pParentXsdPointer=%p, new pParentXsdPointer.elem=%r", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
+				mdebug(LM_XMLP, "case <%r>, new pParentXsdPointer=%p, new pParentXsdPointer.elem=%r", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
 			}
 
             osList_append(&xsdElemPointerList, pXsdPointer);
@@ -646,7 +646,7 @@ osStatus_e osXml_xmlCallback(osPointerLen_t* elemName, osPointerLen_t* value, os
     {
         if(elemName->l < callbackInfo->xmlData[i].dataName.l)
         {
-            debug("the app does not need element(%r), ignore.", elemName);
+            mdebug(LM_XMLP, "the app does not need element(%r), ignore.", elemName);
             return status;
         }
 
@@ -662,7 +662,7 @@ osStatus_e osXml_xmlCallback(osPointerLen_t* elemName, osPointerLen_t* value, os
             {
                 case OS_XML_DATA_TYPE_XS_BOOLEAN:
                     callbackInfo->xmlData[i].xmlIsTrue = strncmp("true", value->p, value->l) == 0 ? true : false;
-                    logInfo("xmlData[%d].dataName = %r, value=%s", i, elemName, callbackInfo->xmlData[i].xmlIsTrue ? "true" : "false");
+                    mlogInfo(LM_XMLP, "xmlData[%d].dataName = %r, value=%s", i, elemName, callbackInfo->xmlData[i].xmlIsTrue ? "true" : "false");
                     break;
                 case OS_XML_DATA_TYPE_XS_SHORT:
                 case OS_XML_DATA_TYPE_XS_INTEGER:
@@ -673,11 +673,11 @@ osStatus_e osXml_xmlCallback(osPointerLen_t* elemName, osPointerLen_t* value, os
                         logError("falis to convert element(%r) value(%r).", elemName, value);
                         return OS_ERROR_INVALID_VALUE;
                     }
-                    logInfo("xmlData[%d].dataName = %r, value=%ld", i, elemName, callbackInfo->xmlData[i].xmlInt);
+                    mlogInfo(LM_XMLP, "xmlData[%d].dataName = %r, value=%ld", i, elemName, callbackInfo->xmlData[i].xmlInt);
                     break;
                 case OS_XML_DATA_TYPE_XS_STRING:
                     callbackInfo->xmlData[i].xmlStr = *value;
-                    logInfo("xmlData[%d].dataName =%r, value= %r", i, elemName, &callbackInfo->xmlData[i].xmlStr);
+                    mlogInfo(LM_XMLP, "xmlData[%d].dataName =%r, value= %r", i, elemName, &callbackInfo->xmlData[i].xmlStr);
                     break;
                 default:
                     logError("unexpected data type(%d) for element(%r).", dataType, elemName);
@@ -771,23 +771,23 @@ static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, o
 
 	if(!pTagInfo)
 	{
-		logInfo("all tags are parsed.");
+		mlogInfo(LM_XMLP, "all tags are parsed.");
 		status = OS_ERROR_INVALID_VALUE;
 		goto EXIT;
 	}
 
-	debug("tag=%r", &pTagInfo->tag);
+	mdebug(LM_XMLP, "tag=%r", &pTagInfo->tag);
 	switch(pTagInfo->tag.l)
 	{
 		case OS_XML_COMPLEXTYPE_LEN:        //len = 14, "xs:complexType"
         {
 			if(pTagInfo->tag.p[3] != 'c' || strncmp("xs:complexType", pTagInfo->tag.p, pTagInfo->tag.l) != 0)
 			{
-				logInfo("top tag(%r) len=14, but is not xs:complexType, ignore.", &pTagInfo->tag);
+				mlogInfo(LM_XMLP, "top tag(%r) len=14, but is not xs:complexType, ignore.", &pTagInfo->tag);
 				break;
 			}
 
-			debug("decode: xs:complexType, pXmlBuf->buf[pXmlBuf->pos]=%c, pXmlBuf->pos=%ld", pXmlBuf->buf[pXmlBuf->pos], pXmlBuf->pos);
+			mdebug(LM_XMLP, "decode: xs:complexType, pXmlBuf->buf[pXmlBuf->pos]=%c, pXmlBuf->pos=%ld", pXmlBuf->buf[pXmlBuf->pos], pXmlBuf->pos);
 			osXmlComplexType_t* pCtInfo = osXsdComplexType_parse(pXmlBuf, pTagInfo, NULL);
 			if(!pCtInfo || !pCtInfo->typeName.l)
 			{
@@ -807,29 +807,29 @@ static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, o
 		case OS_XML_ELEMENT_LEN:            //10, "xs:element"
 			if(strncmp("xs:element", pTagInfo->tag.p, pTagInfo->tag.l) != 0)
 			{
-				logInfo("top tag(%r) len=10, but is not xs:element, ignore.", &pTagInfo->tag);
+				mlogInfo(LM_XMLP, "top tag(%r) len=10, but is not xs:element, ignore.", &pTagInfo->tag);
                 goto EXIT;
             }
 
-			debug("decode: xs:element");
+			mdebug(LM_XMLP, "decode: xs:element");
 
 			*pGlobalElemTagInfo = pTagInfo;
         	break;
 		case OS_XML_SCHEMA_LEN:				//9, "xs:schema"
 			if(strncmp("xs:schema", pTagInfo->tag.p, pTagInfo->tag.l) != 0)
             {
-                logInfo("top tag(%r) len=9, but is not xs:schema, ignore.", &pTagInfo->tag);
+                mlogInfo(LM_XMLP, "top tag(%r) len=9, but is not xs:schema, ignore.", &pTagInfo->tag);
                 break;
             }
 
 			if(pTagInfo->isEndTag)
 			{
-				logInfo("isEndTag=true for the schema tag, xsd parse is completed.");
+				mlogInfo(LM_XMLP, "isEndTag=true for the schema tag, xsd parse is completed.");
 				*isEndSchemaTag = true;
 			}
 			break;
 		default:
-			logInfo("top tag(%r) is ignored.", &pTagInfo->tag);
+			mlogInfo(LM_XMLP, "top tag(%r) is ignored.", &pTagInfo->tag);
 			break;
     }
 
@@ -889,7 +889,7 @@ static osStatus_e osXsdComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplex
                     }
 					else
 					{
-						logInfo("xml mixed value is not correct(%r), ignore.", &pNV->value);
+						mlogInfo(LM_XMLP, "xml mixed value is not correct(%r), ignore.", &pNV->value);
 					}
 				}
 				break;
@@ -899,7 +899,7 @@ static osStatus_e osXsdComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplex
 		
 		if(isIgnored)
 		{
-			logInfo("attribute(%r) is ignored.", &pNV->name);
+			mlogInfo(LM_XMLP, "attribute(%r) is ignored.", &pNV->name);
 		}
 
 		pLE = pLE->next;
@@ -970,7 +970,7 @@ static osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, os
 
 	if(isIgnored)
 	{
-		logInfo("xml tag(%r) is ignored.", &pTagInfo->tag);
+		mlogInfo(LM_XMLP, "xml tag(%r) is ignored.", &pTagInfo->tag);
 	}
 
 EXIT:
@@ -1023,7 +1023,7 @@ static osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInf
                 	//the parsing for a complexType is done
                     if(!pCtInfo->typeName.l && !pParentElem)
                     {
-                    	logInfo("parsed a complexType without name, and there is no parent element, pos=%ld.", pXmlBuf->pos);
+                    	mlogInfo(LM_XMLP, "parsed a complexType without name, and there is no parent element, pos=%ld.", pXmlBuf->pos);
                     }
 
                     if(pParentElem)
@@ -1040,7 +1040,7 @@ static osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInf
             }
 
             //compare the end tag name (newly gotten) and the beginning tag name (from the LE)
-			debug("pTagInfo->tag=%r, pLE->data)->tag=%r", &pTagInfo->tag, &((osXmlTagInfo_t*)pLE->data)->tag);
+			mdebug(LM_XMLP, "pTagInfo->tag=%r, pLE->data)->tag=%r", &pTagInfo->tag, &((osXmlTagInfo_t*)pLE->data)->tag);
             if(osPL_cmp(&((osXmlTagInfo_t*)pLE->data)->tag, &pTagInfo->tag) == 0)
             {
             	osXsdComplexType_getSubTagInfo(pCtInfo, (osXmlTagInfo_t*)pLE->data);
@@ -1137,7 +1137,7 @@ static osStatus_e osXml_parseFirstTag(osMBuf_t* pXmlBuf)
 
     if(!pTagInfo)
     {
-        logInfo("all tags are parsed.");
+        mlogInfo(LM_XMLP, "all tags are parsed.");
         goto EXIT;
     }
 
@@ -1221,7 +1221,7 @@ osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, bool* isSchemaTagDone)
 
     if(!pTagInfo)
     {
-        logInfo("pTagInfo = NULL.");
+        mlogInfo(LM_XMLP, "pTagInfo = NULL.");
         goto EXIT;
     }
 
@@ -1507,7 +1507,7 @@ static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isX
 
 	if(isXsdFirstTag && pBuf->pos != 0)
 	{
-		logInfo("isXsdFirstTag=true, but pBuf->pos != 0, force pBuf->pos to 0.");
+		mlogInfo(LM_XMLP, "isXsdFirstTag=true, but pBuf->pos != 0, force pBuf->pos to 0.");
 		pBuf->pos = 0;
 	}
 
@@ -1672,7 +1672,7 @@ static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isX
 				else if(OSXML_IS_LWS(pBuf->buf[pBuf->pos]) || pBuf->buf[pBuf->pos] == '=')
 				{
 					pnvPair->name.l = pBuf->pos - nvStartPos;
-					debug("pnvPair->name=%r, pos=%ld", &pnvPair->name, pBuf->pos);
+					mdebug(LM_XMLP, "pnvPair->name=%r, pos=%ld", &pnvPair->name, pBuf->pos);
 					if(pBuf->buf[pBuf->pos] == '=')
 					{
 						 state = OS_XSD_TAG_INFO_CONTENT_VALUE_START;
@@ -1713,7 +1713,7 @@ static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isX
                 {
 					pnvPair->value.l = pBuf->pos - nvStartPos;
 					state = OS_XSD_TAG_INFO_CONTENT_NAME_START;
-					debug("pnvPair->value=%r, pos=%ld", &pnvPair->value, pBuf->pos);
+					mdebug(LM_XMLP, "pnvPair->value=%r, pos=%ld", &pnvPair->value, pBuf->pos);
 				}
 				break;
             case OS_XSD_TAG_INFO_END_TAG_SLASH:
@@ -1754,7 +1754,7 @@ EXIT:
 		{
     		pTagInfo->isTagDone = isTagDone;
     		pTagInfo->isEndTag = isEndTag;
-			debug("tag=%r is parsed, isTagDone=%d, isEndTag=%d", &pTagInfo->tag, pTagInfo->isTagDone, pTagInfo->isEndTag);
+			mdebug(LM_XMLP, "tag=%r is parsed, isTagDone=%d, isEndTag=%d", &pTagInfo->tag, pTagInfo->isTagDone, pTagInfo->isEndTag);
 		}
 	}
 
@@ -1974,7 +1974,7 @@ static osXmlDataType_e osXml_getElementType(osPointerLen_t* pTypeValue)
 				break;
 		}
 
-		logInfo("attribute type(%r) is ignored.", pTypeValue);
+		mlogInfo(LM_XMLP, "attribute type(%r) is ignored.", pTypeValue);
 	}
 	else
 	{
@@ -2045,7 +2045,7 @@ static osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
 		case 9:		//xs:string
 			if(strncmp("xs:string", typeValue->p, typeValue->l) != 0)
 			{
-				logInfo("xml data type(%r) is not supported, ignore.", typeValue);
+				mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
 				goto EXIT;
 			}
 			dataType = OS_XML_DATA_TYPE_XS_STRING;
@@ -2061,11 +2061,11 @@ static osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
 			}
 			else
 			{
-				logInfo("xml data type(%r) is not supported, ignore.", typeValue);
+				mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
             }
 			break;
 		default:
-            logInfo("xml data type(%r) is not supported, ignore.", typeValue);
+            mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
 			break;		
 	}
 
@@ -2086,7 +2086,7 @@ static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_el
 
     if(osXml_isXsdElemXSType(pXsdPointer->pCurElem))
     {
-        logInfo("the element(%r) is XS type, does not have child.", &pXsdPointer->pCurElem->elemName);
+        mlogInfo(LM_XMLP, "the element(%r) is XS type, does not have child.", &pXsdPointer->pCurElem->elemName);
         goto EXIT;
     }
 
@@ -2162,7 +2162,7 @@ static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer)
 
 	if(osXml_isXsdElemXSType(pXsdPointer->pCurElem))
     {
-        logInfo("the element(%r) is a XS type.", &pXsdPointer->pCurElem->elemName);
+        mlogInfo(LM_XMLP, "the element(%r) is a XS type.", &pXsdPointer->pCurElem->elemName);
         goto EXIT;
     }
 		

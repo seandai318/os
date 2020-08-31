@@ -1,4 +1,4 @@
-//Copyright (c) 2019, InterLogic
+//Copyright (c) 2020, 2019, Sean Dai
 //
 //This file is the timer module thread entry.  Other threads requiring the timer service register to
 //the timer module.  Each client can have different timeout granuality.  The timer module sets up a timeout
@@ -75,6 +75,7 @@ int osTimerModuleInit(int* timerWriteFd)
         close(timerEpFd);
         return -1;
     }
+	logInfo("pipefd(%d) is added into epoll fd(%d).", pipefd[0], timerEpFd);
 
     osTimerSlot = (osTimerSlotPriv_t*) osmalloc(OS_TIMER_MAX_TIMOUT_MULTIPLE * sizeof(osTimerSlotPriv_t), NULL);
 
