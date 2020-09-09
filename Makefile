@@ -1,8 +1,7 @@
-PROJECT_DIR = ${HOME}/project
+PROJECT_DIR ?= ${HOME}/project
 IDIR = $(PROJECT_DIR)/os/include
 #INC=$(foreach d, $(IDIR), -I$d)
 INC=$(IDIR:%=-I%)
-AR=ar
 
 SRC_DIR = $(PROJECT_DIR)/os/src
 OBJ_DIR = $(PROJECT_DIR)/os/debug
@@ -10,10 +9,16 @@ src = $(wildcard $(SRC_DIR)/*.c)
 obj = $(src:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 dep = $(obj:.o=.d)  # one dependency file for each source
 
-CFLAGS=$(INC) -g -DPREMEM 
-DEBUG = true
-ifeq ($(DEBUG), true)
-	override CFLAGS += -DDEBUG -DPREMEM_DEBUG
+ifdef $(APP_BASE)
+    include $(APP_BASE)/Makefile.cflags
+else
+    CC=gcc
+    AR=ar
+    CFLAGS=$(INC) -g -DPREMEM -std=gnu99
+    DEBUG = true
+    ifeq ($(DEBUG), true)
+        override CFLAGS += -DDEBUG -DPREMEM_DEBUG
+    endif
 endif
 
 LDFLAGS = -lpthread
@@ -22,7 +27,7 @@ libos.a: $(obj)
 	cd $(OBJ_DIR);  $(AR) -cr $@ $^
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	cd $(SRC_DIR); $(CC) $(CFLAGS) -c $(notdir $<) -o $@
 
 -include $(dep)   # include all dep files in the makefile
 
