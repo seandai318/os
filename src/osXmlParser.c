@@ -617,7 +617,7 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
         goto EXIT;
     }
 
-    osXml_parse(xmlBuf, pXsdRoot, callback, callbackInfo);
+    osXml_parse(xmlBuf, pXsdRoot, callback == NULL ? osXml_xmlCallback : callback, callbackInfo);
 
 EXIT:
     osfree(pXsdRoot);
