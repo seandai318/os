@@ -1,9 +1,12 @@
-/* Copyright 2020 Sean Dai
+/********************************************************
+ * Copyright (C) 2020 Sean Dai
+ *
+ * @file osXmlParser.c
  * xsd and xml parser, support the following xml format:
  * xs:boolean, xs:short, xs:integer, xs:long, xs:string, xs:complex
- * validate the xml against xsd.  If a call back is provided, the leaf information of all xml leave elements will be provided via the callback
- */
-
+ * validate the xml against xsd.  If a call back is provided, the leaf
+ * information of all xml leave elements will be provided via the callback
+ ********************************************************/
 
 #include <string.h>
 #include <stdlib.h>

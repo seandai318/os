@@ -1,9 +1,13 @@
-/**
- * @file osString.c String format functions
+/*************************************************************************
+ * Copyright (C) 2019, Sean Dai
  *
- * Copyright (C) 2019 InterLogic
- */
-
+ * @file osString.c  ASCII char and string format manipulation
+ * Adapted from ch.c @Creytiv.com
+ *************************************************************************
+ *@file ch.c  Character format functions
+ *
+ * Copyright (C) 2010 Creytiv.com
+ *************************************************************************/
 
 #define _GNU_SOURCE 1
 #define __EXTENSIONS__ 1
@@ -12,8 +16,6 @@
 #include "osTypes.h"
 #include "osMemory.h"
 #include "osString.h"
-
-
 
 /**
  * Convert an ASCII hex character to binary format

@@ -1,8 +1,14 @@
-/**
- * @file osPL.c Pointer-length functions
+/********************************************************
+ * Copyright (C) 2019, 2020 Sean Dai
  *
- * Copyright (C) 2019 InterLogic
- */
+ * @file osPL.c  Pointer-length functions
+ * Adapted from pl.c @Creytiv.com
+ ********************************************************
+ *@file pl.c  Pointer-length functions
+ *
+ * Copyright (C) 2010 Creytiv.com
+ ********************************************************/
+
 #include <ctype.h>
 #include <sys/types.h>
 #define __EXTENSIONS__ 1

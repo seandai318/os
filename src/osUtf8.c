@@ -1,8 +1,14 @@
-/**
- * @file osUtf8.c  Unicode character coding
+/********************************************************
+ * Copyright (C) 2019, 2020 Sean Dai
  *
- * Copyright (C) 2019 InterLogic
- */
+ * @file osUtf8.c  Unicode character coding
+ * Adapted from unicode.c @Creytiv.com
+ ********************************************************
+ * @file unicode.c  Unicode character coding
+ *
+ * Copyright (C) 2010 Creytiv.com
+ ********************************************************/
+
 #include <ctype.h>
 #include "osTypes.h"
 #include "osPrintf.h"

@@ -1,8 +1,14 @@
-/**
- * @file osMemory.c  Memory management with reference counting
+/********************************************************
+ * Copyright (C) 2019, 2020 Sean Dai
  *
- * Copyright (C) 2019 InterLogic
- */
+ * @file osMemory.c  Memory management with reference counting
+ * Adapted from mem.c @Creytiv.com
+ ********************************************************
+ *@file mem.c  Memory management with reference counting
+ *
+ * Copyright (C) 2010 Creytiv.com
+ ********************************************************/
+
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>

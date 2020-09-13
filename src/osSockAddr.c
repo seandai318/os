@@ -1,3 +1,9 @@
+/********************************************************
+ * Copyright (C) 2019, 2020 Sean Dai
+ *
+ * @file osSockAddr.c  Socket address format translation
+ ********************************************************/
+
 #include <arpa/inet.h>
 #include <string.h>
 

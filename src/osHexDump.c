@@ -1,8 +1,14 @@
-/**
- * @file hexdump.c  Hexadecimal dumping
+/********************************************************
+ * Copyright (C) 2019, Sean Dai
+ *
+ * @file osHexDump.c  Hexadecimal dumping
+ * Adapted from hexdump.c @Creytiv.com
+ ********************************************************
+ *@file hexdump.c  Hexadecimal dumping
  *
  * Copyright (C) 2010 Creytiv.com
- */
+ ********************************************************/
+
 #include <ctype.h>
 #include "osTypes.h"
 #include "osPrintf.h"

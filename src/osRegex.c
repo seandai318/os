@@ -1,8 +1,14 @@
-/**
+/********************************************************
+ * Copyright (C) 2019, Sean Dai
+ *
+ * @file osRegex.c  Implements basic regular expressions
+ * Adapted from regex.c @Creytiv.com
+ ********************************************************
  * @file regex.c Implements basic regular expressions
  *
  * Copyright (C) 2010 Creytiv.com
- */
+ ********************************************************/
+
 #include <ctype.h>
 #include <stdarg.h>
 #include "osTypes.h"

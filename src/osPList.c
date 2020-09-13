@@ -1,3 +1,10 @@
+/********************************************************
+ * Copyright (C) 2019, Sean Dai
+ *
+ * @file osPList.c  enhanced osList function
+ * The functions in this file are currently not used
+ ********************************************************/
+
 #include "osPList.h"
 #include "osDebug.h"
 

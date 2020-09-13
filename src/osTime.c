@@ -1,8 +1,14 @@
-/**
- * @file osTime.c  Time formatting
+/********************************************************
+ * Copyright (C) 2019, Sean Dai
  *
- * Copyright (C) 2019 InterLogic
- */
+ * @file osTime.c  Time formatting
+ * Adapted from time.c @Creytiv.com
+ ********************************************************
+ * @file time.c  Time formatting
+ *
+ * Copyright (C) 2010 Creytiv.com
+ ********************************************************/
+
 #include <time.h>
 #include "osTypes.h"
 #include "osTime.h"

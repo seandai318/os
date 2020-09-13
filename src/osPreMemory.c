@@ -1,4 +1,7 @@
-/* Copyright Sean Dai, 2019-2020
+/******************************************************************************************************
+ * Copyright (C) 2019, 2020, Sean Dai
+ * 
+ * @file osPreMemory.c
  * This function pre-allocates a chunk of memory blocks for various memory sizes.  Each memory
  * block can be referenced by more than one users/threads. The reference add and removal can be
  * protected by achquiring a mutex from a shared mutex poll.  A user may also chose not to acquire
@@ -16,7 +19,7 @@
  * Other than the shared memory poll, each chunk of memory blocks that has the same memory size share
  * a memory block allocation/deallocation mutex.  In order to allocate or deallocate a memory block, the 
  * associated mutex has to be acquired first.
- */  
+ ********************************************************************************************************/  
 
 
 #include <stdlib.h>

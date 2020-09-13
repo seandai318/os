@@ -1,4 +1,8 @@
-//Copyright (c) 2019, InterLogic
+/********************************************************
+ * Copyright (C) 2019, 2020 Sean Dai
+ *
+ * @file osTimer.c  Timer functions
+ ********************************************************/
 
 #include <stdio.h>
 #include <signal.h>

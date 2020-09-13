@@ -1,8 +1,9 @@
-/**
- * @file osDebug.c  Debug printing
+/********************************************************
+ * Copyright (C) 2019, 2020 Sean Dai
  *
- * Copyright (C) 2019 InterLogic
- */
+ * @file osDebug.c  Debug printing
+ ********************************************************/
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>

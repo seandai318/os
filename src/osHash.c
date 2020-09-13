@@ -1,7 +1,13 @@
-/**
+/********************************************************
+ * Copyright (C) 2019, 2020 Sean Dai
+ *
  * @file osHash.c  Hashmap table
- * Copyright (C) 2019, 2020, Sean Dai
- */
+ * Adapted from hash.c @Creytiv.com
+ ********************************************************
+ *@file hash.c  Hashmap table
+ *
+ * Copyright (C) 2010 Creytiv.com
+ ********************************************************/
 
 #include <string.h>
 #include <pthread.h>

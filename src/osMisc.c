@@ -1,3 +1,9 @@
+/********************************************************
+ * Copyright (C) 2019, Sean Dai
+ *
+ * @file osMisc.c  Miscellaneous middleware functions
+ ********************************************************/
+
 #include <stdio.h>
 
 #include "osMisc.h"

@@ -1,9 +1,13 @@
-//Copyright (c) 2020, 2019, Sean Dai
-//
-//This file is the timer module thread entry.  Other threads requiring the timer service register to
-//the timer module.  Each client can have different timeout granuality.  The timer module sets up a timeout
-//signal with a minimal interval.  When the signal calls, the time module will go through all clients to 
-//check if that client shall be notified of the timeout, and do so when the client times out.
+/********************************************************************************************
+ * Copyright (C) 2019, Sean Dai
+ *
+ * @file osTimerModule.c  
+ * This file is the timer module thread entry.  Other threads requiring the timer service 
+ * register to the timer module.  Each client can have different timeout granuality.  The 
+ * timer module sets up a timeout signal with a minimal interval.  When the signal calls, 
+ * the time module will go through all clients to check if that client shall be notified of 
+ * the timeout, and do so when the client times out.
+ ********************************************************************************************/
 
 #define _GNU_SOURCE
 #include <fcntl.h>

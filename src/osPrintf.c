@@ -1,8 +1,14 @@
-/**
- * @file osPrint.c Formatted printing
+/********************************************************
+ * Copyright (C) 2019, Sean Dai
  *
- * Copyright (C) 2019 InterLogic
- */
+ * @file osPrint.c  Formatted printing
+ * Adapted from print.c @Creytiv.com
+ ********************************************************
+ *@file fmt/print.c Formatted printing
+ *
+ * Copyright (C) 2010 Creytiv.com
+ ********************************************************/
+
 #include <string.h>
 #include <math.h>
 #include "osTypes.h"

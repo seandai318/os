@@ -1,6 +1,13 @@
-/* Copyright 2019, 2020, Sean Dai
- * Hashmap functions
- */
+/********************************************************
+ * Copyright (C) 2019, 2020 Sean Dai
+ *
+ * @file osHashKey.c, hash key calculation
+ * Adapted from func.c @Creytiv.com
+ ********************************************************
+ * @file func.c  Hashmap functions
+ *
+ * Copyright (C) 2010 Creytiv.com
+ ********************************************************/
 
 #include <ctype.h>
 #include <string.h>

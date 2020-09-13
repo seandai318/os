@@ -1,8 +1,14 @@
-/**
- * @file osMBuf.c  Memory buffers
+/********************************************************
+ * Copyright (C) 2019, 2020 Sean Dai
  *
- * Copyright (C) 2019 InterLogic
- */
+ * @file osMBuf.c  Memory buffers
+ * Adapted from mbuf.c @Creytiv.com
+ ******************************************************** 
+ * @file mbuf.c  Memory buffers
+ *
+ * Copyright (C) 2010 Creytiv.com
+ ********************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

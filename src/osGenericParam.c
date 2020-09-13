@@ -1,8 +1,13 @@
-/**
- * @file osGenericParm.c Generic parameter decoding
+/********************************************************
+ * Copyright (C) 2019, Sean Dai
  *
- * Copyright (C) 2019 InterLogic
- */
+ * @file osGenericParm.c Generic parameter decoding 
+ * Adapted from prm.c @Creytiv.com
+ ********************************************************
+ *@file prm.c Generic parameter decoding 
+ *
+ * Copyright (C) 2010 Creytiv.com
+ ********************************************************/
 
 #include "osTypes.h"
 #include "osPrintf.h"

@@ -1,7 +1,15 @@
-/* Copyright 2019, 2020, Sean Dai
- * Double Linked List implementation, with a header pointer and a tail pointer, 
- * each element also points to the list head 
- */
+/******************************************************************************
+ * Copyright (C) 2019, 2020, Sean Dai
+ *
+ * @file osList.c
+ * Double Linked List implementation, with a header pointer and a tail pointer,
+ * each element also points to the list head
+ * Adapted from mbuf.c @Creytiv.com
+ ******************************************************************************
+ * @file list.c  Linked List implementation
+ *
+ * Copyright (C) 2010 Creytiv.com
+ ******************************************************************************/
 
 #include "osTypes.h"
 #include "osList.h"
