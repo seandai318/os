@@ -117,6 +117,7 @@ static void tempPrint(osList_t* pList, int i)
     }
 }
 
+
 osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)	
 {
 	osStatus_e status = OS_STATUS_OK;	
@@ -131,6 +132,7 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
 		goto EXIT;
 	}
 
+	//parse <?xml version="1.0" encoding="UTF-8"?>
 	if(osXml_parseFirstTag(pXmlBuf) != OS_STATUS_OK)
 	{
 		logError("fails to parse the xsd first line.");
@@ -140,6 +142,7 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
 
 	bool isSchemaTagDone = false;
     bool isEndSchemaTag = false;
+	//parse <xs:schema xxxx>
 	if(osXsd_parseSchemaTag(pXmlBuf, &isSchemaTagDone) != OS_STATUS_OK)
     {
         logError("fails to parse the xsd schema.");
@@ -162,7 +165,7 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
 		//find a global element
 		if(pGlobalElemTagInfo)
 		{
-			//only allow one global element
+			//only allow one global element, root element
 			if(pXsdGlobalElemTagInfo)
 			{
 				logError("more than one global elements.");
@@ -207,6 +210,9 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
 	}
 
 //tempPrint(&typeList, 1);
+	/* link the root element with the child complex type.  Since the root element can only have one type=xxx, There can 
+     * only have one child complex type.  The child complex type may have multiple its own children though 
+     * */
 	osXsd_elemLinkChild(pRootElem, &typeList);
 //tempPrint(&typeList, 2);
 
@@ -225,6 +231,15 @@ EXIT:
 }
 
 
+/* finds the xsdElem node and notify the value to the user via callback.  This is useful when XML does not configure a element, the same
+ * element in the XSD file shall be used as the default value and notify user
+ *
+ * pXsdElem: IN, an XSD element
+ * xsdCallback:  IN, XSD call back for a XSD element to provide XSD values.  Normally, osXsdElemCallback() will be used as the callback function
+ * xmlCallback:  IN, XML call back function.  It is used as an input to xsdCallback() to provide the XSD values as the default values to user
+ * callbackInfo: INOUT, the XSD value will be set as one of the parameters in the data structure.  Inside this function, it is passed as an
+ *               input to the xsdCallback, which in turn as an input to xmlCallback function
+ */
 void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback, osXmlDataCallbackInfo_t* callbackInfo)
 {
 	osStatus_e status = OS_STATUS_OK;
@@ -236,7 +251,7 @@ void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdCallback,
 		return;
     }
 
-	//callback to provide info for each xsdElement.
+	//callback to provide info for the specified xsdElement.
 	xsdCallback(pXsdElem, xmlCallback, callbackInfo);
 
 	if(pXsdElem->dataType == OS_XML_DATA_TYPE_COMPLEX)
@@ -695,6 +710,10 @@ osStatus_e osXml_xmlCallback(osPointerLen_t* elemName, osPointerLen_t* value, os
 }
 
 
+/* link the parent and child complex type to make a tree
+ * pParentElem: IN, the parent element
+ * pTypeList:   IN, a list of osXmlComplexType_t entries
+ */
 static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pTypeList)
 {
 	osStatus_e status = OS_STATUS_OK;
@@ -747,7 +766,27 @@ EXIT:
 }
 
 
-//this function parse the root element and complexType
+/* The following is an XSD examlpe.
+ *
+ * <?xml version="1.0" encoding="UTF-8"?>
+ * <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+ *   <xs:element name="SeanDai.config" type="SeanDai.configType" />
+ *   <xs:complexType name="SeanDai.configType">
+ *       <xs:all>
+ *       ....
+ *       </xs:all>
+ *   </xs:complexType>
+ *   ....
+ * </xs:schema>
+ *
+ * This function parses the root element (<xs:element name="SeanDai.config" type="SeanDai.configType" / as in the example> and 
+ * and complexType (<xs:complexType name="SeanDai.configType">, etc., as in the example>
+ *
+ * pXmlBuf:            The XSD buffer, pos must points to the beginning of a line
+ * pTypeList:          INOUT, a osXmlComplexType_t data is added into the list when the Global tag is a complex type
+ * pGlobalElemTagInfo: OUT, element info.  Since a XSD has only one element, this must be the root element
+ * isEndSchemaTag:     OUT, if the line is a scheme end tag </xs:schema>
+ */
 static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, osXmlTagInfo_t** pGlobalElemTagInfo, bool* isEndSchemaTag)
 {
 	osStatus_e status = OS_STATUS_OK;
@@ -755,14 +794,15 @@ static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, o
     osXsdElement_t* pRootElement = NULL;
     osXmlTagInfo_t* pTagInfo = NULL;
 
-	*pGlobalElemTagInfo = NULL;
-
-    if(!pXmlBuf || !pGlobalElemTagInfo)
+    if(!pXmlBuf || !pGlobalElemTagInfo || !isEndSchemaTag)
     {
-        logError("null pointer, pXmlBuf=%p, pGlobalElemTagInfo=%p.", pXmlBuf, pGlobalElemTagInfo);
+        logError("null pointer, pXmlBuf=%p, pGlobalElemTagInfo=%p, isEndSchemaTag=%p.", pXmlBuf, pGlobalElemTagInfo, isEndSchemaTag);
 		status = OS_ERROR_NULL_POINTER;
         goto EXIT;
     }
+
+    *pGlobalElemTagInfo = NULL;
+	*isEndSchemaTag = false;
 
     //get tag info for the immediate next tag
 	status = osXml_parseTag(pXmlBuf, false, false, &pTagInfo, NULL);
@@ -1111,6 +1151,7 @@ EXIT:
 }
 
 
+//parse <?xml version="1.0" encoding="UTF-8"?>
 static osStatus_e osXml_parseFirstTag(osMBuf_t* pXmlBuf)
 {
 	osStatus_e status = OS_STATUS_OK;
@@ -1194,6 +1235,7 @@ EXIT:
 }
 
 
+//parse <xs:schema xxxx>
 osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, bool* isSchemaTagDone)
 {
 	osStatus_e status = OS_STATUS_OK;
@@ -1244,7 +1286,31 @@ EXIT:
 }
 
 
-//parse starts from the first tag after the <xs:element xxxx>
+/* parse information wrapped by <xs:element> xxxx </xs:element>
+ * using the following XSD snapshot as an example
+ *
+ * ......
+ *   <xs:complexType name="SeanDai.configType">
+ *       <xs:all>
+ *     -->   <xs:element name="configFileType" type="xs:integer" fixed="1"
+ *               minOccurs="0" maxOccurs="0">
+ *               <xs:annotation>
+ *                   <xs:documentation>
+ *                       sip configuration
+ *                   </xs:documentation>
+ *               </xs:annotation>
+ *           </xs:element>
+ *           <xs:element name="SeanDai.component-specific" type="ComponentSpecificType" />
+ *       </xs:all>
+ *   </xs:complexType>
+ *   ......
+ *
+ * This function can parse info wrapped by <xs:element name="configFileType" type="xs:integer" fixed="1"  minOccurs="0" maxOccurs="0">.
+ * The parse starts from the first tag after the <xs:element xxxx>
+ * pXmlBuf:      IN, XML/XSD buffer, the pos points to the first tag after the <xs:element xxxx>
+ * pElemTagInfo: IN, the <xs:element xxxx> tag info, like name, type, minOccurrs, maxOccurs, etc.
+ * return value: OUT, osXsdElement_t, 
+ */
 static osXsdElement_t* osXmlElement_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagInfo)
 {
 	DEBUG_BEGIN
@@ -1256,7 +1322,7 @@ static osXsdElement_t* osXmlElement_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pEl
 
 	if(!pXmlBuf || !pElemTagInfo)
 	{
-		logError("null pointer, pXmlBuf=%p, pTagInfo=%p.", pXmlBuf, pElemTagInfo);
+		logError("null pointer, pXmlBuf=%p, pElemTagInfo=%p.", pXmlBuf, pElemTagInfo);
 		status = OS_ERROR_NULL_POINTER;
 		goto EXIT;
 	}
@@ -1307,13 +1373,16 @@ static osXsdElement_t* osXmlElement_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pEl
 
         if(pTagInfo->isTagDone)
         {
+		//case for <xs:xxxx xxx\>
 	        //no need to push to the tagList as the end tag is part of the line
             osXmlElement_getSubTagInfo(pElement, pTagInfo);
 			pTagInfo = osfree(pTagInfo);
         }
         else
        	{
-        	//special treatment for xs:complexType, as xs:complex can contain own tags
+		//case for <xs:xxx xxx>
+        	//special treatment for xs:complexType, as xs:complex can contain own tags.  No need to add pTagInfo to tagList as 
+        	//osXsdComplexType_parse() will process the whole <xs:complexType xxx> xxxx </xs:complexType>
             if(pTagInfo->tag.l == 14 && strncmp("xs:complexType", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
             {
 				//we do not need pTagInfo any more
@@ -1490,9 +1559,17 @@ static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagI
 }
 
 
-//isTagNameChecked = true, parse starts after tag name, = false, parse starts before <
-//isTagDone == true, the tag is wrapped in one line, i.e., <tag, tag-content />
-//isEndTag == true, the line is the end of tag, i.e., </tag>
+/* this function parse a line in XSD or XML, <xxx>
+ * isTagNameChecked = true, parse starts after tag name, = false, parse starts before <
+ * isTagDone == true, the tag is wrapped in one line, i.e., <tag, tag-content />
+ * isEndTag == true, the line is the end of tag, i.e., </tag>
+ *
+ * pBug:             IN, a XML/XSD buffer
+ * isTagNameChecked: IN, whether the parse shall start after the tag name, like <xs:element name="xxx...>, whether the chck shall start after "xs:element"
+ * isXsdFirstTag:    IN, if this is to check the first XML/XSD line
+ * ppTagInfo:        OUT, the parsed tag info for the line
+ * tagStartPos:      OUT, the buffer position of '<'
+ */
 static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos) 
 {
 	DEBUG_BEGIN
@@ -2117,7 +2194,14 @@ EXIT:
 }
 
 
-
+/* recursively going through a XSD complex type and call back all its leaf node value
+ *
+ * pCTPointer:   IN, a complex type pointer, contains the complex type node
+ * xsdCallback:  IN, XSD call back for a XSD element to provide XSD values.  Normally, osXsdElemCallback() will be used as the callback function
+ * xmlCallback:  IN, XML call back function.  It is used as an input to xsdCallback() to provide the XSD values as the default values to user
+ * callbackInfo: INOUT, the XSD value will be set as one of the parameters in the data structure.  Inside this function, it is passed as an
+ *               input to the xsdCallback, which in turn as an input to xmlCallback function
+ */
 static void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXsdElemCallback_h xsdCallback, osXmlDataCallback_h xmlCallback, osXmlDataCallbackInfo_t* callbackInfo)
 {
     if(!pCTPointer || !xsdCallback)
