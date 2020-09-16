@@ -65,7 +65,7 @@ typedef enum {
 typedef struct osXsd_elemPointer {
     osXsdElement_t* pCurElem;       //the current working xsd element
 	struct osXsd_elemPointer* pParentXsdPointer;	//the parent xsd pointer
-	int curIdx;						//curIdx in assignedChildIdx[], used in for the ordering presence of sequence deposition
+	int curIdx;						//which idx in assignedChildIdx[] that the xsd element is current processing, used in for the ordering presence of sequence deposition
     bool  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
 } osXsd_elemPointer_t;
 
@@ -265,11 +265,72 @@ void osXsd_browseNode(osXsdElement_t* pXsdElem, osXsdElemCallback_h xsdCallback,
 }
 
 
+/* parse a xml input based on xsd.  Expect the top element is also the xsd root element, i.e., the xml implements the whole xsd  
+ * when parsing a element of a input xml, if the element is a complex type, and the complex type contains multiple other elements, if
+ * some of the elements are missed in the input xml, this function will use the default defined values of the missed elements in the 
+ * xsd via function osXsd_browseNode() if the complex type's dispisition=sequence/all and minOccur=0.  if isUseDefault=false, this function 
+ * would not call osXsd_browseNode(). 
+* 
+ * Using the following xsd and xml as an example
+ * xsd:
+ * <xs:element name="root" type="tRoot" />
+ * <xs:complexType name="tRoot">
+ *     <xs:element name="layer1" type="tLayer1-1"/>
+ *     <xs:element name="layer2" type="tLayer1-2"/>
+ * </xs:complexType>
+ * <xs:complexType name="tLayer1-1">
+ *     <xs:element name="ip-addr" type="xs:string">
+ *     </xs:element>
+ *     <xs:element name="tLayer2-1"/>
+ * </xs:complexType>
+ * <xs:complexType name="tLayer1-2">
+ *     <xs:element type="tLayer2-2">
+ * </xs:complexType>
+ * <xs:complexType name="tLayer2-1">
+ *     <xs:element name="count" default="1" type="xs:int"/>
+ *     <xs:element name="pm-name" type="xs:String">
+ * </xs:complexType>
+ * <xs:complexType name="tLayer2-2">
+ *    <xs:element name="server-name" type="xs:string"/>
+ * </xs:complexType>
+ *
+ * xml:
+ * <root>
+ *     <layer1>
+ *         <ip-addr>1.2.3.4</ip-addr>
+ *         <tLayer2-1>
+ *             <pm-name>ims</pm-name>
+ *         </tLayer2-1>
+ *     </layer1>
+ *     <layer2>
+ *         <tLayer2-2>
+ *             <server-name>super-server</server-name>
+ *         </tLayer2-2>
+ *     </layer2>
+ * </root>
+ *
+ * pBuf:         IN, xml input buffer
+ * pXsdRootElem: IN, the root element of the associated xsd
+ * isUseDefault: IN, when true, the default value from xsd will be used if a complex type's disposition=sequence/all, =false, default value from xsd will not be checked
+ * callback:     IN, callback function for xml leaf node
+ * callbackInfo: OUT, callback data, the xml leaf value will be set there
+ */
 osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallback_h callback, osXmlDataCallbackInfo_t* callbackInfo)
 {
     osStatus_e status = OS_STATUS_OK;
     osXmlTagInfo_t* pElemInfo = NULL;
     osList_t xsdElemPointerList = {};
+	/* note on xsdElemPointerList using xml example above
+	 * when parsing <root>, since it is !pElemInfo->isEndTag && !pElemInfo->isTagDone, "root" is pushed into xsdElemPointerList
+	 * when parsing <layer1>, since it is !pElemInfo->isEndTag && !pElemInfo->isTagDone, "layer1" is pushed into xsdElemPointerList
+	 * when parsing <ip-addr>, since it is !pElemInfo->isEndTag && !pElemInfo->isTagDone, "ip-addr" is pushed into xsdElemPointerList
+	 * when parsing </ip-addr>, since it is pElemInfo->isTagDone, "ip-addr" is popped out of xsdElemPointerList.  since the datat type is xs:string, 
+	 *      it is a leaf node, value is taken, and callback is called
+	 * so on for <tLayer2-1>...</tLyer2-1>
+	 * when parsing </layer1>, since it is pElemInfo->isTagDone, "layer1" is popped out of xsdElemPointerList.
+	 * so on for <layer2> ... </layer2>
+	 * when parsing </root>, "root is popped out of xsdElemPointerList, the xsdElemPointerList is empty, the parse is done
+	 */  
 
     if(!pBuf || !pXsdRootElem)
     {
@@ -290,7 +351,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
 
     osPointerLen_t value;
     size_t tagStartPos;
-	int listIdx = -1;
+	int listIdx = -1;	//the sequence order of the current pElemInfo in the belonged complex type
 	bool isXmlParseDone = false;
     while(pBuf->pos < pBuf->end)
     {
@@ -491,10 +552,12 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
 				{
 					if(listIdx == pParentXsdPointer->curIdx)
 					{
-						//do nothing
+						//the idx pElemInfo equals to what the current element that pParentXsdPointer expects to process, do nothing
 					}
 					else if(listIdx > pParentXsdPointer->curIdx)
 					{
+						//there is gap between the pElemInfo and the current element that pParentXsdPointer expects to process, meaning, some elements
+						//specified in the complex type of the parent element in xsd is missed in the xml
                         osXmlComplexType_t* pParentCT = osXsdPointer_getCT(pParentXsdPointer);
                         if(!pParentCT)
                         {
@@ -555,6 +618,7 @@ osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCa
 
             if(osXml_isXsdElemXSType(pXsdPointer->pCurElem))
             {
+				//set value.l to memorize the beginning of value, to be used when parsing </xxx>. 
                 value.p = &pBuf->buf[pBuf->pos];
                 value.l = pBuf->pos;
             }
@@ -1559,7 +1623,7 @@ static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagI
 }
 
 
-/* this function parse a line in XSD or XML, <xxx>
+/* this function parse a information inside quote <...> in XSD or XML
  * isTagNameChecked = true, parse starts after tag name, = false, parse starts before <
  * isTagDone == true, the tag is wrapped in one line, i.e., <tag, tag-content />
  * isEndTag == true, the line is the end of tag, i.e., </tag>
@@ -2154,6 +2218,13 @@ EXIT:
 }
 
 
+/* get a xsd element(pXsdPointer)'s complex type info, include the order of the current xml element(pTag) in the complex type
+ * pTag:               IN, the current element name in xml that is under parsing
+ * pXsdPointer:        IN, the pTag's parent element in xsd.  Take the xml and xsd example in function osXml_parse() as an example, when parsing pTag="tLayer2-2", 
+ *                     the pXsdPointer="layer2"
+ * pParentXsdDispType: OUT, the disposition type of pXsdPointer, like all, sequence, etc.
+ * listIdx:            OUT, the sequenence order of pTag in the complex type definition of pXsdPointer
+ */ 
 static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, osXmlElemDispType_e* pParentXsdDispType, int* listIdx)
 {
     osXsdElement_t* pChildXsdElem = NULL;
