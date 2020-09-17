@@ -28,6 +28,7 @@ typedef enum {
 
 int osMinInt(int a, int b);
 
+osStatus_e osStr2U64(char* ch, uint32_t len, uint64_t* value);
 osStatus_e osStr2Int(char* ch, uint32_t len, int* value);
 /* isNullTerm the output is a null terminated string, otherwise, the string is not null terminated
  * isReverse the output is reversed, like if the integer is 1234, the string output is: 4321

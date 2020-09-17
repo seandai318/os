@@ -1039,10 +1039,10 @@ static osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, os
 				isIgnored = false;
 			}
 			break;
-		case 9:			//len=9, "xs:sequence"
-			if(strncmp("xs:sequence", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+		case 9:			//len=9, "xs:choice"
+			if(strncmp("xs:choice", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
 			{
-				pCtInfo->elemDispType = OS_XML_ELEMENT_DISP_TYPE_SEQUENCE;
+				pCtInfo->elemDispType = OS_XML_ELEMENT_DISP_TYPE_CHOICE;
 				isIgnored = false;
 			}
 			break;

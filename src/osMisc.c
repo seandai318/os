@@ -47,6 +47,44 @@ osStatus_e osStr2Int(char* ch, uint32_t len, int* value)
 
 	return OS_STATUS_OK;
 }
+
+
+/* convert a numberical string to a uint64_t integer
+ * ch: numberical string
+ * len: the digits of the numericl string
+ * value: the numerical value
+ */
+osStatus_e osStr2U64(char* ch, uint32_t len, uint64_t* value)
+{
+    *value = 0;
+    int sign = 1;
+
+    if(*ch == '-' || *ch =='+')
+    {
+        if(*ch == '-')
+        {
+            sign = -1;
+        }
+        ch++;
+    }
+
+    for(int i=0; i<len; i++)
+    {
+        if(*ch >= '0' && *ch <= '9')
+        {
+            *value = *value * 10 + (*ch - '0');
+            ch++;
+        }
+        else
+        {
+            return OS_ERROR_INVALID_VALUE;
+        }
+    }
+
+    *value *= sign;
+
+    return OS_STATUS_OK;
+}
 	
 
 /* isNullTerm the output is a null terminated string, otherwise, the string is not null terminated
