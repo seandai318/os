@@ -230,7 +230,7 @@ uint64_t osPL_str2u64(const osPointerLen_t *pl)
 }
 
 
-osStatus_e osPL_convertStr2u64(const osPointerLen_t *pl, uint64_t* pValue)
+static osStatus_e osPL_convertStr2u64Internal(const osPointerLen_t *pl, uint64_t* pValue)
 {
     if(!pl || !pl->p)
     {
@@ -256,6 +256,28 @@ osStatus_e osPL_convertStr2u64(const osPointerLen_t *pl, uint64_t* pValue)
     }
 
     return OS_STATUS_OK;
+}
+
+
+osStatus_e osPL_convertStr2u64(const osPointerLen_t *pl, uint64_t* pValue, int* pDigits)
+{
+	osStatus_e status = osPL_convertStr2u64Internal(pl, pValue);
+	if(status == OS_STATUS_OK && pDigits)
+	{
+		int leadingZeroNum = 0;
+		for(int i=0; i<pl->l; i++)
+		{
+			if(pl->p[i] != '0')
+			{
+				break;
+			}
+			leadingZeroNum++;
+		}
+
+		*pDigits = pl->l - leadingZeroNum;
+	}
+
+	return status;
 }
 
 

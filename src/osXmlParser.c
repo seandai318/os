@@ -93,7 +93,7 @@ static void osXsdElemCallback(osXsdElement_t* pXsdElem, osXmlDataCallback_h xmlC
 
 static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos);
 static osXmlDataType_e osXml_getElementType(osPointerLen_t* pTypeValue);
-static osXsdElement_t* osXmlElement_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pTagInfo);
+static osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pTagInfo);
 static osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement);
 static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagInfo_t* pTagInfo);
 static bool osXml_findWhiteSpace(osMBuf_t* pBuf, bool isAdvancePos);
@@ -185,11 +185,11 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
             else if(!pXsdGlobalElemTagInfo->isEndTag)
             {
                 //for <xs:element name="A" type="B" ><xs:complexType name="C">...</xs:complexType></xs:element>
-                pRootElem = osXmlElement_parse(pXmlBuf, pXsdGlobalElemTagInfo);
+                pRootElem = osXsd_parseElement(pXmlBuf, pXsdGlobalElemTagInfo);
 				pRootElem->isRootElement = true;
                 if(!pRootElem)
                 {
-                    logError("fails to osXmlElement_parse for root element, pos=%ld.", pXmlBuf->pos);
+                    logError("fails to osXsd_parseElement for root element, pos=%ld.", pXmlBuf->pos);
 	                status = OS_ERROR_INVALID_VALUE;
                     goto EXIT;
                 }
@@ -749,7 +749,7 @@ osStatus_e osXml_xmlCallback(osPointerLen_t* elemName, osPointerLen_t* value, os
                 case OS_XML_DATA_TYPE_XS_SHORT:
                 case OS_XML_DATA_TYPE_XS_INTEGER:
                 case OS_XML_DATA_TYPE_XS_LONG:
-                    status = osPL_convertStr2u64(value, &callbackInfo->xmlData[i].xmlInt);
+                    status = osPL_convertStr2u64(value, &callbackInfo->xmlData[i].xmlInt, NULL);
                     if(status != OS_STATUS_OK)
                     {
                         logError("falis to convert element(%r) value(%r).", elemName, value);
@@ -1175,10 +1175,10 @@ static osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInf
         	//special treatment for <xs:element xxx> ... </xs:element>, as xs:element can contain own tags.
             if(pTagInfo->tag.l == 10 && strncmp("xs:element", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
             {
-            	osXsdElement_t* pElem = osXmlElement_parse(pXmlBuf, pTagInfo);
+            	osXsdElement_t* pElem = osXsd_parseElement(pXmlBuf, pTagInfo);
                 if(!pElem)
                 {
-                	logError("fails to osXmlElement_parse, pos=%ld.", pXmlBuf->pos);
+                	logError("fails to osXsd_parseElement, pos=%ld.", pXmlBuf->pos);
 					status = OS_ERROR_INVALID_VALUE;
                     goto EXIT;
                 }
@@ -1375,7 +1375,7 @@ EXIT:
  * pElemTagInfo: IN, the <xs:element xxxx> tag info, like name, type, minOccurrs, maxOccurs, etc.
  * return value: OUT, osXsdElement_t, 
  */
-static osXsdElement_t* osXmlElement_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagInfo)
+static osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagInfo)
 {
 	DEBUG_BEGIN
 
