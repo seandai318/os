@@ -49,12 +49,12 @@ osStatus_e osStr2Int(char* ch, uint32_t len, int* value)
 }
 
 
-/* convert a numberical string to a uint64_t integer
+/* convert a numberical string to a int64_t integer
  * ch: numberical string
  * len: the digits of the numericl string
  * value: the numerical value
  */
-osStatus_e osStr2U64(char* ch, uint32_t len, uint64_t* value)
+osStatus_e osStr2Int64(const char* ch, uint32_t len, int64_t* value)
 {
     *value = 0;
     int sign = 1;

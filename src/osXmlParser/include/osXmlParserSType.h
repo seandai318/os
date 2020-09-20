@@ -14,7 +14,6 @@
 
 osXmlSimpleType_t* osXsdSimpleType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pSimpleTagInfo, osXsdElement_t* pParentElem);
 osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, osXmlTagInfo_t* pTagInfo);
-osXmlRestrictionFacet_t* osXsdSimpleType_getFacet(osXmlRestrictionFacet_e facetType, osXmlDataType_e baseType, osXmlTagInfo_t* pTagInfo);
 osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_t* pValue, osXmlData_t* pXmlData);
 
 

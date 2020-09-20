@@ -17,6 +17,7 @@
 
 #include "osXmlParser.h"
 #include "osXmlParserData.h"
+#include "osXmlParserSType.h"
 
 
 #define OS_XML_COMPLEXTYPE_LEN	14
@@ -25,6 +26,8 @@
 #define OS_XML_SCHEMA_LEN		9
 
 
+
+static osXmlRestrictionFacet_t* osXsdSimpleType_getFacet(osXmlRestrictionFacet_e facetType, osXmlDataType_e baseType, osXmlTagInfo_t* pTagInfo);
 
 
 /* parse <xxx> between <xs:simpleType> and </xs:simpleType>, like <<xs:restriction>
@@ -83,9 +86,9 @@ osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, osXmlTa
 					    osListElement_t* pLE = pTagInfo->attrNVList.head;
     					while(pLE)
     					{
-        					if(osPL_strcmp(((osXmlNameValue_t)pLE->data)->name, "base") == 0)
+        					if(osPL_strcmp(&((osXmlNameValue_t*)pLE->data)->name, "base") == 0)
         					{
-								pSimpleInfo->baseType = osXml_getElementType(&((osXmlNameValue_t)pLE->data)->value);
+								pSimpleInfo->baseType = osXsd_getElemDataType(&((osXmlNameValue_t*)pLE->data)->value);
 								break;
 							}
 								
@@ -209,7 +212,7 @@ osXmlSimpleType_t* osXsdSimpleType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pSim
             if(!pLE)
             {
                 //"xs:simpleType" was not pushed into tagList, so it is possible the end tag is "xs:simpleType"
-                f(strncmp("xs:simpleType", pTagInfo->tag.p, pTagInfo->tag.l))
+                if(strncmp("xs:simpleType", pTagInfo->tag.p, pTagInfo->tag.l))
                 {
                     logError("expect the end tag for xs:simpleType, but %r is found.", &((osXmlTagInfo_t*)pLE->data)->tag);
                     status = OS_ERROR_INVALID_VALUE;
@@ -217,9 +220,9 @@ osXmlSimpleType_t* osXsdSimpleType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pSim
                 else
                 {
                     //the parsing for a simpleType is done
-                    if(!pCtInfo->typeName.l && !pParentElem)
+                    if(!pSimpleInfo->typeName.l && !pParentElem)
                     {
-                        mlogInfo(LM_XMLP, "parsed a complexType without name, and there is no parent element, pos=%ld.", pXmlBuf->pos);
+                        mlogInfo(LM_XMLP, "parsed a simpleType without type name, and there is no parent element, pos=%ld.", pXmlBuf->pos);
                     }
 
                     if(pParentElem)
@@ -270,7 +273,7 @@ EXIT:
     if(status != OS_STATUS_OK)
     {
         osfree(pSimpleInfo);
-        pCtInfo = NULL;
+        pSimpleInfo = NULL;
     }
 
     if(pTagInfo)
@@ -299,7 +302,7 @@ osXmlRestrictionFacet_t* osXsdSimpleType_getFacet(osXmlRestrictionFacet_e facetT
         case OS_XML_RESTRICTION_FACET_LENGTH:
         case OS_XML_RESTRICTION_FACET_MIN_LENGTH:
         case OS_XML_RESTRICTION_FACET_MAX_LENGTH:
-            if(osXml_isDigitType(pSimpleInfo->baseType))
+            if(osXml_isDigitType(baseType))
             {
                 goto EXIT;
             }
@@ -310,22 +313,22 @@ osXmlRestrictionFacet_t* osXsdSimpleType_getFacet(osXmlRestrictionFacet_e facetT
         case OS_XML_RESTRICTION_FACET_MAX_EXCLUSIVE:
         case OS_XML_RESTRICTION_FACET_TOTAL_DIGITS:
         case OS_XML_RESTRICTION_FACET_FRACTION_DIGITS:
-            if(!osXml_isDigitType(pSimpleInfo->baseType))
+            if(!osXml_isDigitType(baseType))
             {
                 goto EXIT;
             }
             break;
         case OS_XML_RESTRICTION_FACET_PATTERN:       //regular expression pattern
-            if(osXml_isDigitType(pSimpleInfo->baseType))
+            if(osXml_isDigitType(baseType))
             {
                 goto EXIT;
             }
             isNumerical = false;
             break;
         case OS_XML_RESTRICTION_FACET_ENUM:          //can be value or string, depending on the restriction base type
-            isNumerical = osXml_isDigitType(pSimpleInfo->baseType) ? true : false;
+            isNumerical = osXml_isDigitType(baseType) ? true : false;
             break;
-        case OS_XML_RESTRICTION_FACET_WHITE_SPACE,   //"preserve", "replace", "collapse"
+        case OS_XML_RESTRICTION_FACET_WHITE_SPACE:   //"preserve", "replace", "collapse"
         default:
             mlogInfo(LM_XMLP, "facet type(%d) is ignored", facetType);
             goto EXIT;
@@ -343,18 +346,19 @@ osXmlRestrictionFacet_t* osXsdSimpleType_getFacet(osXmlRestrictionFacet_e facetT
     osListElement_t* pLE = pTagInfo->attrNVList.head;
     while(pLE)
     {
-        if(osPL_strcmp(((osXmlNameValue_t)pLE->data)->name, "value") == 0)
+        if(osPL_strcmp(&((osXmlNameValue_t*)pLE->data)->name, "value") == 0)
         {
             if(isNumerical)
             {
-                if(osStr2U64(((osXmlNameValue_t)pLE->data)->value.p, ((osXmlNameValue_t)pLE->data)->value.l, &pFacet->value) != OS_STATUS_OK)
+                if(osPL_convertStr2u64(&((osXmlNameValue_t*)pLE->data)->value, &pFacet->value, NULL) != OS_STATUS_OK)
                 {
-                    logError("expect a numerical value for a facet(%d), but the real value is(%r).", facetType, &((osXmlNameValue_t)pLE->data)->value);
+                    logError("expect a numerical value for a facet(%d), but the real value is(%r).", facetType, &((osXmlNameValue_t*)pLE->data)->value);
                     goto EXIT;
+				}
             }
             else
             {
-                pFacet->string = ((osXmlNameValue_t)pLE->data)->value;
+                pFacet->string = ((osXmlNameValue_t*)pLE->data)->value;
             }
             goto EXIT;
         }
@@ -368,8 +372,8 @@ EXIT:
 
 
 
-/* perform sanity check of the simpleType data from an xml input against the facets of a pSimple object from the xsd.  A xs:simpleType is converted
- * to the simpleType's baseType, the data value will also be set in pXmlData as an output.
+/* perform sanity check of the simpleType data from an xml input against the facets of a pSimple object from the xsd.  
+ * A xs:simpleType is converted to the simpleType's baseType, the data value will also be set in pXmlData as an output.
  *
  * pValue: the data value gotten from xml input
  * pSimple: a osXmlSimpleType_t object that was parsed based on xsd
@@ -389,13 +393,13 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
     	case OS_XML_DATA_TYPE_XS_INTEGER:
     	case OS_XML_DATA_TYPE_XS_LONG:
 		{
-			bool digitNum=0;
+			int digitNum=0;
 			int isEnumMatch = -1;		//-1: not an enum simpleType, 0: an enum simpleType, but match has not found, 1: an enum simpleType, and match found
-			if(osPL_convertStr2u64(value, &pXmlData->xmlInt, &digitNum) != OS_STATUS_OK)
+			if(osPL_convertStr2u64(pValue, &pXmlData->xmlInt, &digitNum) != OS_STATUS_OK)
             {
 				pXmlData->dataType = OS_XML_DATA_TYPE_INVALID;
 				status = OS_ERROR_INVALID_VALUE;
-            	logError("falis to convert element(%r) value(%r).", elemName, value);
+            	logError("falis to convert simpleType(%r) value(%r).", &pSimple->typeName, pValue);
                 goto EXIT;
 			}
 			

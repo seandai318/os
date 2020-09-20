@@ -22,13 +22,13 @@
 
 
 void osXsd_elemCallback(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo);
-static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos);
-static osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pTagInfo);
-static osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement);
-static bool osXml_findWhiteSpace(osMBuf_t* pBuf, bool isAdvancePos);
-static bool osXml_findPattern(osMBuf_t* pXmlBuf, osPointerLen_t* pPattern, bool isAdvancePos);
-static bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem);
-
+osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos);
+osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pTagInfo);
+osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement);
+bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem);
+osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue);
+bool osXml_isDigitType(osXmlDataType_e dataType);
+void osXsdElement_cleanup(void* data);
 
 
 

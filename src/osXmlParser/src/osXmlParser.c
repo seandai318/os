@@ -88,10 +88,7 @@ static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, o
 static void* osXsd_getTypeByname(osList_t* pTypeList, osPointerLen_t* pElemTypeName);
 static osStatus_e osXml_parseFirstTag(osMBuf_t* pBuf);
 static osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, bool* isSchemaTagDone);
-static osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue);
-static void osXsdElement_cleanup(void* data);
 static void osXsd_browseNode(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo);
-static osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pTagInfo);
 
 static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo);
 static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool isUseDefault, osXmlDataCallbackInfo_t* callbackInfo);
@@ -739,6 +736,7 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
         goto EXIT;
     }
 
+	logInfo("start xsd parse for %s.", xsdFileName);
     pXsdRoot = osXsd_parse(xsdMBuf);
     if(!pXsdRoot)
     {
@@ -746,6 +744,7 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
         status = OS_ERROR_INVALID_VALUE;
         goto EXIT;
     }
+	logInfo("xsd parse for %s is done.", xsdFileName);
 
 	//8000 is the initial mBuf size.  If the reading needs more than 8000, the function will realloc new memory
     xmlBuf = osMBuf_readFile(xmlFile, 8000);
@@ -756,7 +755,9 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
         goto EXIT;
     }
 
+	logInfo("start xml parse for %s.", xmlFileName);
     osXml_parse(xmlBuf, pXsdRoot, isUseDefault, callbackInfo);
+	logInfo("xml parse for %s is done.", xmlFileName);
 
 EXIT:
     osfree(pXsdRoot);
@@ -918,7 +919,7 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
 			//this is the case for a complex type embedded inside a <xs:element></xs:element>, the pParentElem->pComplex shall have been resolved
 			if(!pParentElem->pComplex)
 			{
-				logError("a embedded complex type, but pParentElem->pComplex is null.");
+				logError("xsd element=%r, an embedded complex type, but pParentElem->pComplex is null.", &pParentElem->elemName);
 				status = OS_ERROR_INVALID_VALUE;
 				goto EXIT;
 			}
@@ -933,6 +934,7 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
             }
 			break;
 		default:
+			mdebug(LM_XMLP, "xsd element(%r), dataType=%d, ignore.", &pParentElem->elemName, pParentElem->dataType);
 			//already stored in each element's data structure
 //tempPrint(pTypeList, 4);
 			break;
@@ -1250,7 +1252,7 @@ EXIT:
  * pElemTagInfo: IN, the <xs:element xxxx> tag info, like name, type, minOccurrs, maxOccurs, etc.
  * return value: OUT, osXsdElement_t, 
  */
-static osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagInfo)
+osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagInfo)
 {
 	DEBUG_BEGIN
 
@@ -1361,7 +1363,7 @@ EXIT:
 }
 
 
-static osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement)
+osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement)
 {
 	osStatus_e status = OS_STATUS_OK;
 	if(!pElement || !pAttrList)
@@ -1509,7 +1511,7 @@ static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagI
  * ppTagInfo:        OUT, the parsed tag info for the line
  * tagStartPos:      OUT, the buffer position of '<'
  */
-static osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos) 
+osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos) 
 {
 	DEBUG_BEGIN
 	osStatus_e status = OS_STATUS_OK;
@@ -2041,7 +2043,7 @@ static bool osXml_isXsdElemXSType(osXsdElement_t* pXsdElem)
 }
 
 
-static bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem)
+bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem)
 {
     if(!pXsdElem)
     {
@@ -2064,8 +2066,7 @@ static bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem)
 }
 
 
-#if 0
-static osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
+osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
 {
 	osXmlDataType_e dataType = OS_XML_DATA_TYPE_INVALID;
 
@@ -2078,7 +2079,7 @@ static osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
 	//for now, assume the only supported no XS data type is complex data type
 	if(strncmp("xs:", typeValue->p, 3) != 0)
 	{
-		dataType = OS_XML_DATA_TYPE_COMPLEX;
+		dataType = OS_XML_DATA_TYPE_NO_XS;
 		goto EXIT;
 	}
 
@@ -2126,7 +2127,26 @@ static osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
 EXIT:
 	return dataType;
 }
-#endif
+
+
+bool osXml_isDigitType(osXmlDataType_e dataType)
+{
+	switch(dataType)
+	{
+    	case OS_XML_DATA_TYPE_XS_BOOLEAN:
+    	case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
+    	case OS_XML_DATA_TYPE_XS_SHORT:
+    	case OS_XML_DATA_TYPE_XS_INTEGER:
+    	case OS_XML_DATA_TYPE_XS_LONG:
+			return true;
+			break;
+		default:
+			break;
+	}
+
+	return false;
+}
+
 
 /* get a xsd element(pXsdPointer)'s complex type info, include the order of the current xml element(pTag) in the complex type
  * pTag:               IN, the current element name in xml that is under parsing
@@ -2258,7 +2278,7 @@ static void osXmlComplexType_cleanup(void* data)
 }
 
 
-static void osXsdElement_cleanup(void* data)
+void osXsdElement_cleanup(void* data)
 {
     if(!data)
     {

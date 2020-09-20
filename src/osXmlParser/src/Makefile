@@ -23,6 +23,7 @@ LDFLAGS = -lpthread
 
 libxmlparser.a: $(obj)
 	$(AR) -cr $@ $^
+	rm -f $(obj) *.a $(dep)
 
 -include $(dep)   # include all dep files in the makefile
 
