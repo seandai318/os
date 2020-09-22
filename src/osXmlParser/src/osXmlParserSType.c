@@ -67,7 +67,7 @@ static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, 
             {
                 facetType = OS_XML_RESTRICTION_FACET_MIN_LENGTH;
             }
-			else if(pTagInfo->tag.p[4] == 'a' &&strncmp("xs:maxength", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+			else if(pTagInfo->tag.p[4] == 'a' &&strncmp("xs:maxLength", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
             {
                 facetType = OS_XML_RESTRICTION_FACET_MAX_LENGTH;
             }
@@ -600,7 +600,7 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
             {
                 pXmlData->dataType = OS_XML_DATA_TYPE_INVALID;
                 status = OS_ERROR_INVALID_VALUE;
-                logError("pXmlData->xmlInt(%ld) is an enum, but does not match enum value in xsd.", pXmlData->xmlInt);
+                logError("pXmlData->xmlStr(%r) is an enum, but does not match enum value in xsd.", &pXmlData->xmlStr);
                 goto EXIT;
             }
 
