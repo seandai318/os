@@ -49,7 +49,7 @@ void osList_delete(osList_t* pList)
 		return;
 	}
 
-logError("to-remove, delete, addr=%p, total element=%d", pList, osList_getCount(pList));
+	mdebug(LM_MEM, "delete a list, pList=%p, total element=%d", pList, osList_getCount(pList));
 	pLE = pList->head;
 	while (pLE) {
 		osListElement_t *pNext = pLE->next;
@@ -57,8 +57,6 @@ logError("to-remove, delete, addr=%p, total element=%d", pList, osList_getCount(
 		pLE->list = NULL;
 		pLE->prev = pLE->next = NULL;
 		pLE->data = NULL;
-
-    logError("to-remove, delete, addr=%p.", pLE);
 
 		osfree(pLE);
 
@@ -114,14 +112,13 @@ void osList_clear(osList_t* pList)
 	if (!pList)
 		return;
 
+	mdebug(LM_MEM, "pList=%p.", pList);
 	pLE = pList->head;
 	while (pLE) {
 		osListElement_t *pNext = pLE->next;
 		pLE->list = NULL;
 		pLE->prev = pLE->next = NULL;
 		pLE->data = NULL;
-
-    logError("to-remove, clear, addr=0x%x.", pLE);
 
 		osfree(pLE);
 		pLE = pNext;
@@ -145,6 +142,7 @@ osListElement_t* osList_append(osList_t *list, void *data)
 		return NULL;
 	}
 
+	mdebug(LM_MEM, "pList=%p, data=%p.", list, data);	
 	osListElement_t* pLE = osmalloc_r(sizeof(osListElement_t), NULL);
 	if(pLE == NULL)
 	{
@@ -167,7 +165,6 @@ osListElement_t* osList_append(osList_t *list, void *data)
 
 	list->tail = pLE;
 
-	logError("to-remove, append, size=%d, addr=%p.", sizeof(osListElement_t), pLE);
 	return pLE;
 }
 
@@ -743,7 +740,7 @@ osStatus_e osListPlus_append(osListPlus_t* pList, void* pData)
 		goto EXIT;
 	}
 
-logError("to-remove, TCM, num=%d, pData=%p", pList->num, pData);
+	mdebug("LM_MEM, pList=%p, pList->num=%d, pData=%p", pList, pList->num, pData);
 	if(pList->num == 0)
 	{
 		pList->first = pData;

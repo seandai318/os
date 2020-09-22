@@ -19,10 +19,11 @@
 #include "osXmlParserCType.h"
 
 
+static osStatus_e osXsdComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplexType_t* pCtInfo);
 static void osXmlComplexType_cleanup(void* data);
 
 
-osStatus_e osXsdComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplexType_t* pCtInfo)
+static osStatus_e osXsdComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplexType_t* pCtInfo)
 {
 	osStatus_e status = OS_STATUS_OK;
     if(!pCtInfo || !pAttrList)
@@ -293,12 +294,15 @@ EXIT:
  * callbackInfo: INOUT, the XSD value will be set as one of the parameters in the data structure.  Inside this function, it is passed as an
  *               input to the xsdCallback, which in turn as an input to xmlCallback function
  */
-void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXmlDataCallbackInfo_t* callbackInfo)
+osStatus_e osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXmlDataCallbackInfo_t* callbackInfo)
 {
+	osStatus_e status = OS_STATUS_OK;
+
     if(!pCTPointer)
     {
         logError("null pointer, pCTPointer=%p.", pCTPointer);
-        return;
+        status = OS_ERROR_NULL_POINTER;
+		goto EXIT;
     }
 
     osXmlComplexType_t* pCT = pCTPointer->pCT;
@@ -311,20 +315,30 @@ void osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXmlDataCallbackInfo_t* 
             pCTPointer->doneListIdx++;
             osXsdElement_t* pChildElem = pLE->data;
 
-			osXsd_elemCallback(pChildElem, callbackInfo);
+			status = osXsd_elemCallback(pChildElem, callbackInfo);
+			if(status != OS_STATUS_OK)
+			{
+				logError("fails to osXsd_elemCallback.");
+				goto EXIT;
+			}
 
 			if(!osXml_isXsdElemSimpleType(pChildElem))
             {
                 osXsd_ctPointer_t* pNextCTPointer = oszalloc(sizeof(osXsd_ctPointer_t), NULL);
                 pNextCTPointer->pCT = pChildElem->pComplex;
-                osXsd_transverseCT(pNextCTPointer, callbackInfo);
+                status = osXsd_transverseCT(pNextCTPointer, callbackInfo);
                 osfree(pNextCTPointer);
+				if(status != OS_STATUS_OK)
+				{
+					goto EXIT;
+				}
             }
         }
         pLE = pLE->next;
     }
 
-    return;
+EXIT:
+    return status;
 }
 
 

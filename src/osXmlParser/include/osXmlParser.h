@@ -21,13 +21,14 @@
 #define OS_XML_MAX_FILE_NAME_SIZE	160		//the maximum xml and xsd file name length
 
 
-void osXsd_elemCallback(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo);
+osStatus_e osXsd_elemCallback(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo);
 osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos);
 osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pTagInfo);
 osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement);
 bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem);
 osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue);
 bool osXml_isDigitType(osXmlDataType_e dataType);
+bool osXml_isXSSimpleType(osXmlDataType_e dataType);
 void osXsdElement_cleanup(void* data);
 
 

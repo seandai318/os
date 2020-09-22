@@ -88,7 +88,7 @@ static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, o
 static void* osXsd_getTypeByname(osList_t* pTypeList, osPointerLen_t* pElemTypeName);
 static osStatus_e osXml_parseFirstTag(osMBuf_t* pBuf);
 static osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, bool* isSchemaTagDone);
-static void osXsd_browseNode(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo);
+static osStatus_e osXsd_browseNode(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo);
 
 static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo);
 static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool isUseDefault, osXmlDataCallbackInfo_t* callbackInfo);
@@ -238,7 +238,7 @@ EXIT:
  * callbackInfo: INOUT, the XSD value will be set as one of the parameters in the data structure.  Inside this function, it is passed as an
  *               input to the osXsd_elemCallback, which in turn as an input to xmlCallback function
  */
-static void osXsd_browseNode(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo)
+static osStatus_e osXsd_browseNode(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo)
 {
 	osStatus_e status = OS_STATUS_OK;
 
@@ -246,20 +246,27 @@ static void osXsd_browseNode(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* 
     {
         logError("null pointer, pXsdElem=%p.", pXsdElem);
         status = OS_ERROR_NULL_POINTER;
-		return;
+		goto EXIT;
     }
 
 	//callback to provide info for the specified xsdElement.
-	osXsd_elemCallback(pXsdElem, callbackInfo);
+	status = osXsd_elemCallback(pXsdElem, callbackInfo);
+	if(status != OS_STATUS_OK)
+	{
+		goto EXIT;
+	}
 
 	if(pXsdElem->dataType == OS_XML_DATA_TYPE_COMPLEX)
 	{
     	osXsd_ctPointer_t* pCTPointer = oszalloc(sizeof(osXsd_ctPointer_t), NULL);
     	pCTPointer->pCT = pXsdElem->pComplex;
     	pCTPointer->doneListIdx = 0;
-    	osXsd_transverseCT(pCTPointer, callbackInfo);
+    	status = osXsd_transverseCT(pCTPointer, callbackInfo);
     	osfree(pCTPointer);
 	}
+
+EXIT:
+	return status;
 }
 
 
@@ -429,7 +436,12 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool
 									//browse the info for xsd that is not configured in the xml file, inside the function, callback for the default value will be called  
 									if(isUseDefault)
 									{
-										osXsd_browseNode(pXsdElem, callbackInfo);
+										status = osXsd_browseNode(pXsdElem, callbackInfo);
+										if(status != OS_STATUS_OK)
+										{
+											osListElement_delete(pLE);
+											goto EXIT;
+										}
 									}
 								}
 							}
@@ -486,7 +498,13 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool
                 value.l = tagStartPos - value.l;
 			
 				//The data sanity check is performed by callback()
-                osXml_xmlCallback(pCurXsdElem, &value, callbackInfo);
+                status = osXml_xmlCallback(pCurXsdElem, &value, callbackInfo);
+				if(status != OS_STATUS_OK)
+				{
+					logError("fails to validate xml for element(%r).", &pCurXsdElem->elemName);
+					osListElement_delete(pLE);
+					goto EXIT;
+				}
             }
 
 			//end of file check
@@ -584,7 +602,12 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool
                                     //browse the info for xsd that is not configured in the xml file.  Inside the function, callback for the default value will be called
                                     if(isUseDefault)
 									{
-										osXsd_browseNode(pXsdElem, callbackInfo);
+										status = osXsd_browseNode(pXsdElem, callbackInfo);
+										if(status != OS_STATUS_OK)
+										{
+											osfree(pXsdPointer);
+											goto EXIT;
+										}
 									}
 								}
 								else
@@ -756,7 +779,13 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
     }
 
 	logInfo("start xml parse for %s.", xmlFileName);
-    osXml_parse(xmlBuf, pXsdRoot, isUseDefault, callbackInfo);
+    status = osXml_parse(xmlBuf, pXsdRoot, isUseDefault, callbackInfo);
+	if(status != OS_STATUS_OK)
+	{
+		logError("xml parse for %s failed.", xmlFileName);
+		goto EXIT;
+	}
+
 	logInfo("xml parse for %s is done.", xmlFileName);
 
 EXIT:
@@ -781,7 +810,7 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
         //that requires within xmlData, the dataName has to be sorted from shortest to longest
         if(pElement->elemName.l < callbackInfo->xmlData[i].dataName.l)
         {
-            mdebug(LM_XMLP, "the app does not need element(%r), ignore.", &pElement->elemName);
+            mdebug(LM_XMLP, "the app does not need element(%r), value=%r, ignore.", &pElement->elemName, value);
             return status;
         }
 
@@ -1035,11 +1064,13 @@ static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pCTypeList, 
                 break;
             }
 
-            mdebug(LM_XMLP, "decode: xs:simpleType, pXmlBuf->buf[pXmlBuf->pos]=%c, pXmlBuf->pos=%ld", pXmlBuf->buf[pXmlBuf->pos], pXmlBuf->pos);
+            mdebug(LM_XMLP, "decode: xs:simpleType, pXmlBuf->buf[pXmlBuf->pos]=0x%x, pXmlBuf->pos=%ld", pXmlBuf->buf[pXmlBuf->pos], pXmlBuf->pos);
             osXmlSimpleType_t* pSimpleInfo = osXsdSimpleType_parse(pXmlBuf, pTagInfo, NULL);
             if(!pSimpleInfo || !pSimpleInfo->typeName.l)
             {
                 logError("simple global type is NULL or has no typeName, pSimpleInfo=%p, typeName.l=%ld.", pSimpleInfo, pSimpleInfo ? pSimpleInfo->typeName.l : 0);
+
+int i=100/pSimpleInfo->typeName.l;
                 if(pSimpleInfo)
                 {
                     osfree(pSimpleInfo);
@@ -2119,6 +2150,16 @@ osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
 				mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
             }
 			break;
+		case 15:	//xs:unsignedByte
+			if(typeValue->p[3] == 'u' && strncmp("xs:unsignedByte", typeValue->p, typeValue->l) == 0)
+			{
+				dataType = OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE;
+			}
+            else
+            {
+                mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
+            }
+            break;
 		default:
             mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
 			break;		
@@ -2145,6 +2186,24 @@ bool osXml_isDigitType(osXmlDataType_e dataType)
 	}
 
 	return false;
+}
+
+
+bool osXml_isXSSimpleType(osXmlDataType_e dataType)
+{
+    switch(dataType)
+    {
+        case OS_XML_DATA_TYPE_INVALID:
+        case OS_XML_DATA_TYPE_NO_XS:
+        case OS_XML_DATA_TYPE_SIMPLE:
+        case OS_XML_DATA_TYPE_COMPLEX:
+            return false;
+            break;
+        default:
+            break;
+    }
+
+    return true;
 }
 
 
@@ -2223,25 +2282,37 @@ EXIT:
  * pXsdElem:     IN, a xsd element
  * callbackInfo: OUT, to store callback info
  */
-void osXsd_elemCallback(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo)
+osStatus_e osXsd_elemCallback(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo)
 {
+	osStatus_e status = OS_STATUS_OK;
+
 	if(!pXsdElem)
 	{
 		logError("null pointer, pXsdElem.");
-		return;
+		status = OS_ERROR_NULL_POINTER;
+		goto EXIT;
 	}
 
 	if(osXml_isXsdElemSimpleType(pXsdElem))
 	{
        	if(pXsdElem->fixed.p && pXsdElem->fixed.l > 0)
         {
-        	osXml_xmlCallback(pXsdElem, &pXsdElem->fixed, callbackInfo);
+        	status = osXml_xmlCallback(pXsdElem, &pXsdElem->fixed, callbackInfo);
         }
         else if(pXsdElem->elemDefault.p && pXsdElem->elemDefault.l > 0)
         {
-        	osXml_xmlCallback(pXsdElem, &pXsdElem->elemDefault, callbackInfo);
+        	status = osXml_xmlCallback(pXsdElem, &pXsdElem->elemDefault, callbackInfo);
+		}
+
+		if(status != OS_STATUS_OK)
+		{
+			logError("fails to validate element(%r).", &pXsdElem->elemName);
+			goto EXIT;
 		}
 	}
+
+EXIT:
+	return status;
 }
 
 

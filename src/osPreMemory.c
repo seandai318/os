@@ -88,7 +88,7 @@ static void* osPreMem_reallocDebug_internal(void* pData, size_t size, char* file
 
 //65536 for trHash and tpServerLB hash, 262144 for proxy hash, 1048576 for reg hash
 static uint32_t osPreMemSize[OS_PREMEM_MAX_IDX+1] = {16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 65536, 262144, 1048576, sizeof(pthread_mutex_t)};
-static uint32_t osPreMemNum[OS_PREMEM_MAX_IDX+1] = {10010, 10010, 10010, 10010, 10010,10010, 10010,10010, 10010, 10010, 2, 1, 1, OS_PREMEM_MAX_MUTEX_POLL};
+static uint32_t osPreMemNum[OS_PREMEM_MAX_IDX+1] = {10010, 10010, 10010, 10010, 10010,10010, 10010,10010, 10010, 10010, 10, 1, 1, OS_PREMEM_MAX_MUTEX_POLL};
 static osPreMemIdx_t osPreMemUnused[OS_PREMEM_MAX_IDX+1];
 #ifdef PREMEM_DEBUG
 static osPreMemIdx_t osPreMemUsed[OS_PREMEM_MAX_IDX+1];

@@ -27,13 +27,15 @@
 
 
 
+static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, osXmlTagInfo_t* pTagInfo);
+static osStatus_e osXsdSimpleType_getAttrInfo(osList_t* pAttrList, osXmlSimpleType_t* pSInfo);
 static osXmlRestrictionFacet_t* osXsdSimpleType_getFacet(osXmlRestrictionFacet_e facetType, osXmlDataType_e baseType, osXmlTagInfo_t* pTagInfo);
 
 
 /* parse <xxx> between <xs:simpleType> and </xs:simpleType>, like <<xs:restriction>
  * only support baseType being a XS simple type 
 */
-osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, osXmlTagInfo_t* pTagInfo)
+static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, osXmlTagInfo_t* pTagInfo)
 {
     osStatus_e status = OS_STATUS_OK;
 
@@ -95,7 +97,7 @@ osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, osXmlTa
 							pLE = pLE->next;
 						}
 
-						if(pSimpleInfo->baseType == OS_XML_DATA_TYPE_INVALID || pSimpleInfo->baseType != OS_XML_DATA_TYPE_NO_XS)
+						if(!osXml_isXSSimpleType(pSimpleInfo->baseType))
 						{
 							logError("a simpleType's base type(%d) is invalid or not XS simple type.", pSimpleInfo->baseType);
 							status = OS_ERROR_INVALID_VALUE;
@@ -194,6 +196,7 @@ osXmlSimpleType_t* osXsdSimpleType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pSim
     }
 
     pSimpleInfo = osmalloc(sizeof(osXmlSimpleType_t), NULL);
+    osXsdSimpleType_getAttrInfo(&pSimpleTagInfo->attrNVList, pSimpleInfo);
 
     while(pXmlBuf->pos < pXmlBuf->end)
     {
@@ -242,7 +245,7 @@ osXmlSimpleType_t* osXsdSimpleType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pSim
             mdebug(LM_XMLP, "pTagInfo->tag=%r, pLE->data)->tag=%r", &pTagInfo->tag, &((osXmlTagInfo_t*)pLE->data)->tag);
             if(osPL_cmp(&((osXmlTagInfo_t*)pLE->data)->tag, &pTagInfo->tag) == 0)
             {
-                osXsdSimpleType_getSubTagInfo(pSimpleInfo, (osXmlTagInfo_t*)pLE->data);
+               // osXsdSimpleType_getSubTagInfo(pSimpleInfo, (osXmlTagInfo_t*)pLE->data);
                 osListElement_delete(pLE);
                 pTagInfo = osfree(pTagInfo);
                 continue;
@@ -264,6 +267,9 @@ osXmlSimpleType_t* osXsdSimpleType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pSim
         }
         else
         {
+			//perform tag parse as soon as a value is gotten.  This is necessary especially for xs:restriction, as baseType is needed for other tag's parsing
+            osXsdSimpleType_getSubTagInfo(pSimpleInfo, pTagInfo);
+
             //add the beginning tag to the tagList, the info in the beginning tag will be processed when the end tag is met
             osList_append(&tagList, pTagInfo);
         }
@@ -285,8 +291,54 @@ EXIT:
 }
                                                                                                                         
 
+static osStatus_e osXsdSimpleType_getAttrInfo(osList_t* pAttrList, osXmlSimpleType_t* pSInfo)
+{
+    osStatus_e status = OS_STATUS_OK;
+    if(!pSInfo || !pAttrList)
+    {
+        logError("null pointer, pSInfo=%p, pAttrList=%p.", pSInfo, pAttrList);
+        status = OS_ERROR_NULL_POINTER;
+        goto EXIT;
+    }
 
-osXmlRestrictionFacet_t* osXsdSimpleType_getFacet(osXmlRestrictionFacet_e facetType, osXmlDataType_e baseType, osXmlTagInfo_t* pTagInfo)
+    osListElement_t* pLE = pAttrList->head;
+    while(pLE)
+    {
+        osXmlNameValue_t* pNV = pLE->data;
+        if(!pNV)
+        {
+            logError("pNV is NULL, this shall never happen.");
+            goto EXIT;
+        }
+
+        bool isIgnored = true;
+        switch(pNV->name.p[0])
+        {
+            case 'n':   //for "name"
+                if(pNV->name.l == 4 && strncmp("name", pNV->name.p, pNV->name.l) == 0)
+                {
+                    pSInfo->typeName = pNV->value;
+                    isIgnored = false;
+                }
+                break;
+            default:
+                break;
+        }
+
+        if(isIgnored)
+        {
+            mlogInfo(LM_XMLP, "attribute(%r) is ignored.", &pNV->name);
+        }
+
+        pLE = pLE->next;
+    }
+
+EXIT:
+    return status;
+}
+
+
+static osXmlRestrictionFacet_t* osXsdSimpleType_getFacet(osXmlRestrictionFacet_e facetType, osXmlDataType_e baseType, osXmlTagInfo_t* pTagInfo)
 {
     bool isNumerical = true;
     osXmlRestrictionFacet_t* pFacet = NULL;
@@ -482,6 +534,8 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
                 goto EXIT;
             }
 
+            mlogInfo(LM_XMLP, "xmlData.dataName=%r, value=%r", &pXmlData->dataName, pValue);
+
 			break;
 		}	//case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE etc.
     	case OS_XML_DATA_TYPE_XS_STRING: 	//xs:anyURI falls in this enum
@@ -549,6 +603,8 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
                 logError("pXmlData->xmlInt(%ld) is an enum, but does not match enum value in xsd.", pXmlData->xmlInt);
                 goto EXIT;
             }
+
+            mlogInfo(LM_XMLP, "xmlData.dataName=%r, value=%r", &pXmlData->dataName, pValue);
 
             break;
         }	//case OS_XML_DATA_TYPE_XS_STRING
