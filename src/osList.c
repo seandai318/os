@@ -740,7 +740,7 @@ osStatus_e osListPlus_append(osListPlus_t* pList, void* pData)
 		goto EXIT;
 	}
 
-	mdebug("LM_MEM, pList=%p, pList->num=%d, pData=%p", pList, pList->num, pData);
+	mdebug(LM_MEM, "pList=%p, pList->num=%d, pData=%p", pList, pList->num, pData);
 	if(pList->num == 0)
 	{
 		pList->first = pData;
