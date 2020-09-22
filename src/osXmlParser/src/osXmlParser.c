@@ -1982,74 +1982,6 @@ EXIT:
 }
 
 
-static osXmlDataType_e osXsd_getElementDataType(osPointerLen_t* pTypeValue)
-{
-	osXmlDataType_e dataType = OS_XML_DATA_TYPE_INVALID;
-
-	if(!pTypeValue)
-	{
-		logError("null pointer, pTypeValue.");
-		goto EXIT;
-	}
-
-	if(!OSXML_IS_XS_TYPE(pTypeValue))
-	{
-		dataType = OS_XML_DATA_TYPE_NO_XS;
-		goto EXIT;
-	}
-
-	switch (pTypeValue->l)
-	{
-        case 7:
-            if(strncmp("xs:long", pTypeValue->p, pTypeValue->l) == 0)
-            {
-                dataType = OS_XML_DATA_TYPE_XS_LONG;
-                goto EXIT;
-            }
-            break;
-		case 8:
-            if(strncmp("xs:short", pTypeValue->p, pTypeValue->l) == 0)
-            {
-                dataType = OS_XML_DATA_TYPE_XS_SHORT;
-                goto EXIT;
-            }
-            break;
-		case 9:		//xs:string
-			if(strncmp("xs:string", pTypeValue->p, pTypeValue->l) == 0)
-			{
-				dataType = OS_XML_DATA_TYPE_XS_STRING;
-				goto EXIT;
-			}
-			break;
-		case 10:	//xs:integer, xs:boolean
-			if(pTypeValue->p[3] == 'i' && strncmp("xs:integer", pTypeValue->p, pTypeValue->l) == 0)
-			{
-				dataType = OS_XML_DATA_TYPE_XS_INTEGER;
-				goto EXIT;
-            }
-			else if(pTypeValue->p[3] == 'b' && strncmp("xs:boolean", pTypeValue->p, pTypeValue->l) == 0)
-            {
-                dataType = OS_XML_DATA_TYPE_XS_BOOLEAN;
-                goto EXIT;
-            }
-			break;
-		case 15:	//xs:unsignedByte
-			if(strncmp("xs:unsignedByte", pTypeValue->p, pTypeValue->l) == 0)
-			{
-				dataType = OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE;
-				goto EXIT;
-            }
-            break;
-		default:
-			break;
-	}
-
-	mlogInfo(LM_XMLP, "attribute type(%r) is ignored.", pTypeValue);
-
-EXIT:
-	return dataType;
-}
-
 static bool osXml_isXsdElemXSType(osXsdElement_t* pXsdElem)
 {
     if(!pXsdElem)
@@ -2120,50 +2052,65 @@ osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
             if(strncmp("xs:long", typeValue->p, typeValue->l) == 0)
             {
                 dataType = OS_XML_DATA_TYPE_XS_LONG;
+				goto EXIT;
             }
             break;
 		case 8:
             if(strncmp("xs:short", typeValue->p, typeValue->l) == 0)
             {
                 dataType = OS_XML_DATA_TYPE_XS_SHORT;
+				goto EXIT;
             }
 			break;
-		case 9:		//xs:string
-			if(strncmp("xs:string", typeValue->p, typeValue->l) != 0)
-			{
-				mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
+		case 9:		//xs:string, xs:anyURI
+            if(typeValue->p[3] == 's' && strncmp("xs:string", typeValue->p, typeValue->l) == 0)
+            {
+                dataType = OS_XML_DATA_TYPE_XS_STRING;
 				goto EXIT;
-			}
-			dataType = OS_XML_DATA_TYPE_XS_STRING;
+            }
+            else if (typeValue->p[3] == 'a' && strncmp("xs:anyURI", typeValue->p, typeValue->l) == 0)
+            {
+                dataType = OS_XML_DATA_TYPE_XS_STRING;
+				goto EXIT;
+            }
 			break;
 		case 10:	//xs:integer, xs:boolean
 			if(typeValue->p[9] == 'r' && strncmp("xs:integer", typeValue->p, typeValue->l) == 0)
 			{
 				dataType = OS_XML_DATA_TYPE_XS_INTEGER;
+				goto EXIT;
 			}
 			else if(typeValue->p[9] == 'n' && strncmp("xs:boolean", typeValue->p, typeValue->l) == 0)
 			{
 				dataType = OS_XML_DATA_TYPE_XS_BOOLEAN;
+				goto EXIT;
 			}
-			else
-			{
-				mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
-            }
 			break;
-		case 15:	//xs:unsignedByte
+        case 11:    //xs:dateTime
+            if(typeValue->p[3] == 'd' && strncmp("xs:dateTime", typeValue->p, typeValue->l) == 0)
+            {
+                dataType = OS_XML_DATA_TYPE_XS_STRING;
+				goto EXIT;
+            }
+            break;
+
+		case 15:	//xs:unsignedByte, xs:base64Binary
 			if(typeValue->p[3] == 'u' && strncmp("xs:unsignedByte", typeValue->p, typeValue->l) == 0)
 			{
 				dataType = OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE;
+				goto EXIT;
 			}
-            else
+            else if(typeValue->p[3] == 'b' && strncmp("xs:base64Binary", typeValue->p, typeValue->l) == 0)
             {
-                mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
+                dataType = OS_XML_DATA_TYPE_XS_STRING;
+                goto EXIT;
             }
             break;
 		default:
-            mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
 			break;		
 	}
+
+	mlogInfo(LM_XMLP, "xml data type(%r) is not supported, ignore.", typeValue);
 
 EXIT:
 	return dataType;
