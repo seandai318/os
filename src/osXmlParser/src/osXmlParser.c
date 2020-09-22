@@ -29,25 +29,6 @@
 #define OS_XML_SCHEMA_LEN		9
 
 
-#if 0 
-//help data structure for tag and namve-value pair list
-typedef struct {
-	osPointerLen_t tag;
-    bool isTagDone; 				//the tag is wrapped in one line, i.e., <tag, tag-content />
-    bool isEndTag;  				//the line is the end of tag, i.e., </tag>
-	bool isPElement;				//if the union data is pElement, this value is true
-	union {
-		osList_t attrNVList;		//each list element contains osXmlNameValue_t
-		osXsdElement_t* pElement;	//if tag is xs:element, and contains info other than tag attributes, this data structure will be used
-	};
-} osXmlTagInfo_t;
-
-
-typedef struct osXmlNameValue {
-    osPointerLen_t name;
-    osPointerLen_t value;
-} osXmlNameValue_t;
-#endif
 
 //for function osXml_parseTag()
 typedef enum {
