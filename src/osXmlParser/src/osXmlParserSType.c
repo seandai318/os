@@ -30,6 +30,7 @@
 static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, osXmlTagInfo_t* pTagInfo);
 static osStatus_e osXsdSimpleType_getAttrInfo(osList_t* pAttrList, osXmlSimpleType_t* pSInfo);
 static osXmlRestrictionFacet_t* osXsdSimpleType_getFacet(osXmlRestrictionFacet_e facetType, osXmlDataType_e baseType, osXmlTagInfo_t* pTagInfo);
+static void osXmlSimpleType_cleanup(void* data);
 
 
 /* parse <xxx> between <xs:simpleType> and </xs:simpleType>, like <<xs:restriction>
@@ -195,7 +196,7 @@ osXmlSimpleType_t* osXsdSimpleType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pSim
         goto EXIT;
     }
 
-    pSimpleInfo = osmalloc(sizeof(osXmlSimpleType_t), NULL);
+    pSimpleInfo = osmalloc(sizeof(osXmlSimpleType_t), osXmlSimpleType_cleanup);
     osXsdSimpleType_getAttrInfo(&pSimpleTagInfo->attrNVList, pSimpleInfo);
 
     while(pXmlBuf->pos < pXmlBuf->end)
@@ -615,3 +616,15 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
 EXIT:
 	return status;
 }
+
+
+static void osXmlSimpleType_cleanup(void* data)
+{
+	if(!data)
+	{
+		return;
+	}
+
+	osXmlSimpleType_t* pSimple = data;
+	osList_delete(&pSimple->facetList);
+}		

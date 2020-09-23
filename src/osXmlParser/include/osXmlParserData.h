@@ -93,7 +93,7 @@ typedef struct osXsdElement {
 		osXmlComplexType_t* pComplex;
 		osXmlSimpleType_t* pSimple;
 	};
-	osList_t* pSimpleTypeList;	//Since simpleType objects shall be kept permanently, this can be removed
+	osList_t* pSimpleTypeList;	//Since simpleType objects shall be kept permanently, this can be removed.  Currently this is not used.
 } osXsdElement_t;
 
 
