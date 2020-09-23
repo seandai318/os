@@ -20,7 +20,6 @@
 
 
 static osStatus_e osXsdComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplexType_t* pCtInfo);
-static void osXmlComplexType_cleanup(void* data);
 
 
 static osStatus_e osXsdComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplexType_t* pCtInfo)
@@ -132,6 +131,7 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
         			osXmlElement_getAttrInfo(&pTagInfo->attrNVList, pElement);
 				}
 
+				mdebug(LM_XMLP, "element(%r) is parsed, minOccurs=%d, maxOccurs=%d, dataType=%d", &pElement->elemName, pElement->minOccurs, pElement->maxOccurs, pElement->dataType);
         		osList_append(&pCtInfo->elemList, pElement);
                 isIgnored = false;
     		}
@@ -284,6 +284,8 @@ EXIT:
     	osfree(pTagInfo);
 	}
 
+	mdebug(LM_XMLP, "complexType(%r) is parsed, elemDispType=%d", &pCtInfo->typeName, pCtInfo->elemDispType);
+
 	return pCtInfo;
 }
 
@@ -342,7 +344,7 @@ EXIT:
 }
 
 
-static void osXmlComplexType_cleanup(void* data)
+void osXmlComplexType_cleanup(void* data)
 {
     if(!data)
     {

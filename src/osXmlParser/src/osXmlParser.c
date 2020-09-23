@@ -192,20 +192,24 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
 	/* link the root element with the child complex type.  Since the root element can only have one type=xxx, There can 
      * only have one child complex type.  The child complex type may have multiple its own children though 
      * */
-	osXsd_elemLinkChild(pRootElem, &ctypeList, pSTypeList);
+	status = osXsd_elemLinkChild(pRootElem, &ctypeList, pSTypeList);
 //tempPrint(&ctypeList, 2);
 
 EXIT:
-	osList_clear(&ctypeList);
 	osfree(pXsdGlobalElemTagInfo);
 
-	if(status != OS_STATUS_OK)
+	if(status == OS_STATUS_OK)
+	{
+        //delete the cTypeList data structure, the cType data will be kept permanently as part of the xsd tree
+        osList_clear(&ctypeList);
+    }
+	else
 	{
 		logError("status != OS_STATUS_OK, delete pRootElem.");
+		osList_delete(&ctypeList);
 		osfree(pRootElem);
 		pRootElem = NULL;
-		osList_clear(pSTypeList);
-		osfree(pSTypeList);
+		osList_free(pSTypeList);
 	}
 
 	return pRootElem;
@@ -881,6 +885,7 @@ static osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen
  */
 static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCTypeList, osList_t* pSTypeList)
 {
+	DEBUG_BEGIN
 	osStatus_e status = OS_STATUS_OK;
 
 	if(!pParentElem || !pCTypeList)
@@ -951,6 +956,7 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
 	}
 
 EXIT:
+	DEBUG_END
 	return status;
 }
 
@@ -2029,6 +2035,13 @@ osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
 
 	switch(typeValue->l)
 	{
+        case 6:	//xs:int
+            if(strncmp("xs:int", typeValue->p, typeValue->l) == 0)
+            {
+                dataType = OS_XML_DATA_TYPE_XS_INTEGER;
+                goto EXIT;
+            }
+            break;
         case 7:
             if(strncmp("xs:long", typeValue->p, typeValue->l) == 0)
             {
@@ -2265,18 +2278,6 @@ static void osXmlTagInfo_cleanup(void* data)
 }
 
 
-static void osXmlComplexType_cleanup(void* data)
-{
-    if(!data)
-    {
-        return;
-    }
-
-	osXmlComplexType_t* pCT = data;
-	osList_delete(&pCT->elemList);
-}
-
-
 void osXsdElement_cleanup(void* data)
 {
     if(!data)
@@ -2284,9 +2285,16 @@ void osXsdElement_cleanup(void* data)
         return;
     }
 
-	osXsdElement_t* pElement = data;
-	if(pElement->dataType == OS_XML_DATA_TYPE_COMPLEX)
-	{
-		osfree(pElement->pComplex);
-	}
+	//only cleanup the complexType object, do not free the object, as a complexType may be used by multiple elements, if each element
+	//deletes the same complexType object, over free a memory will happen. As a matter of fact, since the xsd tree shall be kept for the 
+	//whole program life.  if something wrong during the middle of building the xsd tree, the osList_delete(&ctypeList) during xsd_parse 
+	//will take care of freeing the complexType object memory, otherwise, all complexType objects will be kept forever.  
+	//The same for the simpleType object memory.  If something wrong during the xsd tree building, osList_free(pSTypeList) will
+	//release the simpleType object memory, otherwise, they will be kept forever
+	//osXmlComplexType_cleanup is needed to recursively delete all elements starting from the root element 
+    osXsdElement_t* pElement = data;
+    if(pElement->dataType == OS_XML_DATA_TYPE_COMPLEX)
+    {
+		osXmlComplexType_cleanup(pElement->pComplex);
+    }
 } 

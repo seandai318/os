@@ -287,6 +287,8 @@ EXIT:
         osfree(pTagInfo);
     }
 
+	mdebug(LM_XMLP, "simpleType(%r) is passed, baseType=%d.", &pSimpleInfo->typeName, pSimpleInfo->baseType);
+
     return pSimpleInfo;
 }
                                                                                                                         

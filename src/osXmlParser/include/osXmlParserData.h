@@ -88,11 +88,12 @@ typedef struct osXsdElement {
     osPointerLen_t elemDefault;
     osPointerLen_t fixed;
 	osXmlDataType_e dataType;
+	//do not free pComplex or pSimple when a osXsdElement_t is freed, otherwise if multiple xsdElement points to the same Type object, over free will happen
 	union {
 		osXmlComplexType_t* pComplex;
 		osXmlSimpleType_t* pSimple;
 	};
-	osList_t* pSimpleTypeList;	//each element contains osXmlSimpleType_t, all xsdElement points to the same osList
+	osList_t* pSimpleTypeList;	//Since simpleType objects shall be kept permanently, this can be removed
 } osXsdElement_t;
 
 

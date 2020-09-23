@@ -849,8 +849,8 @@ static void* osPreMem_free_internal(void *pData, bool isPrintDebug)
 
 	if(ptr->nrefs == 0)
 	{
-		logError("try to free a memory(%p) that has nrefs=0.", pData);
         ptr->pMutex ? pthread_mutex_unlock(ptr->pMutex) : (void)0;
+		logError("try to free a memory(%p) that has nrefs=0.", pData);
 		return NULL;
 	}
 

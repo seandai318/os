@@ -251,6 +251,7 @@ void* osMem_deref(void *pData)
 	m = ((osMemHeader_t *)pData) - 1;
 
 	mdebug(LM_MEM, "de-alloc-addr=%p, nrefs=%ld", pData, m->nrefs);
+	//the following case is dangerous, as if m->nrefs=0, implies the memory has already been deallocated, and may has been assigned for other use.
 	if(m->nrefs == 0)
 	{
 		logError("try to free a already deallocated memory(%p).", pData);
