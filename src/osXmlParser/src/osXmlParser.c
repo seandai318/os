@@ -895,6 +895,14 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
 		goto EXIT;
 	}
 
+	//check if it is a xs:any element
+	if(pParentElem->isElementAny)
+	{
+        mdebug(LM_XMLP, "a xs:any element. no further process is needed, ignore.");
+		goto EXIT;
+	}
+
+	//if not xs:any element
 	switch(pParentElem->dataType)
 	{
 		case OS_XML_DATA_TYPE_NO_XS:
