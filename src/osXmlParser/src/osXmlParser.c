@@ -1381,6 +1381,130 @@ EXIT:
 }
 
 
+/* parse <xs:any> xxx </xs:any>
+ */
+osXsdElement_t* osXsd_parseElementAny(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagInfo)
+{
+    osStatus_e status = OS_STATUS_OK;
+    osList_t tagList = {};
+    osXsdElement_t* pElement = NULL;
+    osXmlTagInfo_t* pTagInfo = NULL;
+
+    if(!pXmlBuf || !pElemTagInfo)
+    {
+        logError("null pointer, pXmlBuf=%p, pElemTagInfo=%p.", pXmlBuf, pElemTagInfo);
+        status = OS_ERROR_NULL_POINTER;
+        goto EXIT;
+    }
+
+    pElement = oszalloc(sizeof(osXsdElement_t), osXsdElement_cleanup);
+    pElement->isElementAny = true;
+    pElement->elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_STRICT;
+
+    status = osXmlElement_getAttrInfo(&pElemTagInfo->attrNVList, pElement);
+    if(status != OS_STATUS_OK || pElement->elemAnyTag.processContent == OS_XSD_PROCESS_CONTENTS_STRICT || !(pElement->elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_ANY || pElement->elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_OTHER))
+    {
+    	osfree(pElement);
+        logError("fails in one of the following: osXmlElement_getAttrInfo() status=%d, processContent=%d, elemNamespace=%d.", status, pElement->elemAnyTag.processContent, pElement->elemAnyTag.elemNamespace);
+        if(status == OS_STATUS_OK)
+        {
+        	status = OS_ERROR_INVALID_VALUE;
+        }
+        goto EXIT;
+    }
+
+    //starts to parse the sub tags of xs:any, ignore all sub tags
+    while(pXmlBuf->pos < pXmlBuf->end)
+    {
+        //get tag info for each tags inside xs:element
+        status = osXml_parseTag(pXmlBuf, false, false, &pTagInfo, NULL);
+        if(status != OS_STATUS_OK || !pTagInfo)
+        {
+            logError("fails to osXml_parseTag.");
+            goto EXIT;
+        }
+
+        if(pTagInfo->isEndTag)
+        {
+            osListElement_t* pLE = osList_popTail(&tagList);
+            if(!pLE)
+            {
+                //"xs:element" was not pushed into tagList, so it is possible the end tag is "xs:element"
+                if(pTagInfo->tag.l != 10 || strncmp("xs:element", pTagInfo->tag.p, pTagInfo->tag.l))
+                {
+                    logError("expect the end tag for xs:element, but %r is found.", &((osXmlTagInfo_t*)pLE->data)->tag);
+                }
+
+                goto EXIT;
+            }
+
+            //compare the end tag name (newly gotten) and the beginning tag name (from the LE)
+            if(osPL_cmp(&((osXmlTagInfo_t*)pLE->data)->tag, &pTagInfo->tag) == 0)
+            {
+                osXmlElement_getSubTagInfo(pElement, (osXmlTagInfo_t*)pLE->data);
+                osListElement_delete(pLE);
+                pTagInfo = osfree(pTagInfo);
+                continue;
+            }
+            else
+            {
+                logError("input xml is invalid, error in (%r).", &pTagInfo->tag);
+                osListElement_delete(pLE);
+                goto EXIT;
+            }
+        }
+
+        if(pTagInfo->isTagDone)
+        {
+        //case for <xs:xxxx xxx\>
+            //no need to push to the tagList as the end tag is part of the line
+            osXmlElement_getSubTagInfo(pElement, pTagInfo);
+            pTagInfo = osfree(pTagInfo);
+        }
+        else
+        {
+        //case for <xs:xxx xxx>
+            //special treatment for xs:complexType, as xs:complex can contain own tags.  No need to add pTagInfo to tagList as
+            //osXsdComplexType_parse() will process the whole <xs:complexType xxx> xxxx </xs:complexType>
+            if(pTagInfo->tag.l == 14 && strncmp("xs:complexType", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+            {
+                //we do not need pTagInfo any more
+                pTagInfo = osfree(pTagInfo);
+
+                //the link between pElement and child type is done inside osXsdComplexType_parse()
+                osXmlComplexType_t* pCtInfo = osXsdComplexType_parse(pXmlBuf, pTagInfo, pElement);
+                if(!pCtInfo || pCtInfo->typeName.l)
+                {
+                    //complex type within a element does not have type name
+                    logError("complexType is NULL or has typeName, pCtInfo=%p, typeName=%r.", pCtInfo, pCtInfo ? &pCtInfo->typeName : 0);
+                    if(pCtInfo)
+                    {
+                        osfree(pCtInfo);
+                    }
+                    goto EXIT;
+                }
+            }
+            else
+            {
+                //add the beginning tag to the tagList, the info in the beginning tag will be processed when the end tag is met
+                osList_append(&tagList, pTagInfo);
+            }
+        }
+    }
+
+EXIT:
+    if(pTagInfo)
+    {
+        osfree(pTagInfo);
+    }
+
+    osList_delete(&tagList);
+
+    DEBUG_END
+    return pElement;
+}
+
+
 osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement)
 {
 	osStatus_e status = OS_STATUS_OK;
@@ -1408,10 +1532,28 @@ osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElemen
 
 		switch(pNV->name.p[0])
 		{
-			case 'n':	//for "name"
+			case 'n':	//for "name", "namespace"
 				if(pNV->name.l == 4 && strncmp("name", pNV->name.p, pNV->name.l) == 0)		
 				{
 					pElement->elemName = pNV->value;
+				}
+				else if(pElement->isElementAny && pNV->name.l == 9 && strncmp("namespace", pNV->name.p, pNV->name.l) == 0)
+				{
+					if(pNV->value.l == 5 && osPL_strcmp(&pNV->value, "##any") ==0)
+					{
+						 pElement->elemAnyTag.elemNamespace = OS_XSD_NAME_SPACE_ANY;
+					}
+					else if(pNV->value.l == 7 && osPL_strcmp(&pNV->value, "##other") == 0)
+					{
+						pElement->elemAnyTag.elemNamespace = OS_XSD_NAME_SPACE_OTHER; 
+					}
+					else
+					{
+						//for namespace, only support "##any" and "##other"
+						logError("is a any element, but namespace value(%r) is not supported(##any, ##other).", &pNV->value);
+						status = OS_ERROR_INVALID_VALUE;
+						goto EXIT;
+					}
 				}
 				break;
 			case 't':	//for type
@@ -1494,6 +1636,25 @@ osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElemen
 					else
 					{
 						logError("form attribute has wrong value (%r).", &pNV->value);
+					}
+				}
+				break;
+			case 'p':	//processContents
+				if(pElement->isElementAny && pNV->name.l == 15 && osPL_strcmp(&pNV->name, "processContents") == 0)
+				{
+					if(osPL_strcmp(&pNV->value, "lax") == 0)
+					{
+						pElement->elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_LAX;
+					}
+					else if(osPL_strcmp(&pNV->value, "skip") == 0)
+					{
+						pElement->elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_SKIP;
+					}
+					else
+					{
+	                    logError("is a any element, but processContents value(%r) is not supported (lax, skip).", &pNV->value);
+    	                status = OS_ERROR_INVALID_VALUE;
+        	            goto EXIT;
 					}
 				}
 				break;

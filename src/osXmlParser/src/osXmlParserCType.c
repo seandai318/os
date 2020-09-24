@@ -103,12 +103,44 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
 	bool isIgnored = true;
 	switch(pTagInfo->tag.l)
 	{
-		case 6:			//len=6, "xs:all"
+		case 6:			//len=6, "xs:all", "xs:any"
 			if(strncmp("xs:all", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
 			{
 				pCtInfo->elemDispType = OS_XML_ELEMENT_DISP_TYPE_ALL;
 				isIgnored = false;
 			}
+			else if(strncmp("xs:any", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+			{
+                osXsdElement_t* pElement;
+				//for case <xs:any> ... </xs:any>.  In that case, isPElement will be set
+                if(pTagInfo->isPElement)
+                {
+                    pElement = pTagInfo->pElement;
+                }
+                else
+                {
+					//for case <xs:any xxx />
+					pElement = oszalloc(sizeof(osXsdElement_t), osXsdElement_cleanup);
+					pElement->isElementAny = true;
+					pElement->elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_STRICT;
+
+					status = osXmlElement_getAttrInfo(&pTagInfo->attrNVList, pElement);
+					if(status != OS_STATUS_OK || pElement->elemAnyTag.processContent == OS_XSD_PROCESS_CONTENTS_STRICT || !(pElement->elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_ANY || pElement->elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_OTHER))
+					{
+						osfree(pElement);
+						logError("fails in one of the following: osXmlElement_getAttrInfo() status=%d, processContent=%d, elemNamespace=%d.", status, pElement->elemAnyTag.processContent, pElement->elemAnyTag.elemNamespace);
+						if(status == OS_STATUS_OK)
+						{
+							status = OS_ERROR_INVALID_VALUE;
+						}
+						goto EXIT;
+					}
+				}
+
+                mdebug(LM_XMLP, "A any element is parsed, minOccurs=%d, maxOccurs=%d, namespace=%d, processContents=%d", pElement->minOccurs, pElement->maxOccurs, pElement->elemAnyTag.elemNamespace, pElement->elemAnyTag.processContent);
+                osList_append(&pCtInfo->elemList, pElement);
+                isIgnored = false;
+            }
 			break;
 		case 9:			//len=9, "xs:choice"
 			if(strncmp("xs:choice", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
@@ -121,12 +153,14 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
 			if(strncmp("xs:element", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
     		{
 				osXsdElement_t* pElement;
+                //for case <xs:element> ... </xs:element>.  In that case, isPElement will be set
 				if(pTagInfo->isPElement)
 				{
 					pElement = pTagInfo->pElement;
 				}
 				else
 				{
+					//for case <xs:element xxx />
         			pElement = oszalloc(sizeof(osXsdElement_t), osXsdElement_cleanup);
         			osXmlElement_getAttrInfo(&pTagInfo->attrNVList, pElement);
 				}
@@ -245,7 +279,7 @@ osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pC
         }
         else
         {
-        	//special treatment for <xs:element xxx> ... </xs:element>, as xs:element can contain own tags.
+        	//for case <xs:element xxx> ... </xs:element>.  For case <xs:element xxx />, it is handled in pTagInfo->isTagDone case.
             if(pTagInfo->tag.l == 10 && strncmp("xs:element", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
             {
             	osXsdElement_t* pElem = osXsd_parseElement(pXmlBuf, pTagInfo);
@@ -264,8 +298,27 @@ osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pC
                 osXsdComplexType_getSubTagInfo(pCtInfo, pTagInfo);
 				osfree(pTagInfo);
             }
-            else
+			//for case <xs:any> (annotation?) </xs:any>.  for case <xs:any xxx />, it is handled in pTagInfo->isTagDone case.
+            else if(pTagInfo->tag.l == 6 && strncmp("xs:any", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
             {
+				osXsdElement_t* pElem = osXsd_parseElementAny(pXmlBuf, pTagInfo);
+				if(!pElem)
+                {
+                    logError("fails to osXsd_parseElementAny, pos=%ld.", pXmlBuf->pos);
+                    status = OS_ERROR_INVALID_VALUE;
+                    goto EXIT;
+                }
+
+				//reuse the pTagInfo allocated during <xs:element xxx> parsing
+                osList_delete(&pTagInfo->attrNVList);
+                pTagInfo->isPElement = true;
+                pTagInfo->pElement = pElem;
+
+                osXsdComplexType_getSubTagInfo(pCtInfo, pTagInfo);
+                osfree(pTagInfo);	
+			}
+			else
+			{
                	//add the beginning tag to the tagList, the info in the beginning tag will be processed when the end tag is met
                 osList_append(&tagList, pTagInfo);
             }

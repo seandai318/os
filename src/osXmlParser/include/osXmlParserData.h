@@ -56,6 +56,22 @@ typedef struct {
 } osXmlRestrictionFacet_t;
 
 
+//for now, only support LAX
+typedef enum {
+	OS_XSD_PROCESS_CONTENTS_LAX,
+	OS_XSD_PROCESS_CONTENTS_SKIP,
+	OS_XSD_PROCESS_CONTENTS_STRICT,
+} osXsdAnyElemPS_e;
+
+typedef enum {
+	OS_XSD_NAME_SPACE_ANY,		//##any
+	OS_XSD_NAME_SPACE_OTHER,	//##other
+	OS_XSD_NAME_SPACE_LOCAL,	//##local
+	OS_XSD_NAME_SPACE_TARGET,	//##targetNamespace
+	OS_XSD_NAME_SPACE_LIST,		//List of {URI references, ##targetNamespace, ##local}
+} osXsdAnyElemNS_e;
+
+
 typedef enum {
 	OS_XML_ELEMENT_DISP_TYPE_ALL,
 	OS_XML_ELEMENT_DISP_TYPE_SEQUENCE,
@@ -78,8 +94,15 @@ typedef struct {
 } osXmlSimpleType_t;
 
 
+typedef struct {
+	osXsdAnyElemNS_e elemNamespace;	//for now, only support ##any or ##other
+	osXsdAnyElemPS_e processContent;
+} osXmlAnyElementTag_t;
+
+
 typedef struct osXsdElement {
 	bool isRootElement;
+	bool isElementAny;		//if this is <xsd:any>
 	osPointerLen_t elemName;
 	osPointerLen_t elemTypeName;
 	int minOccurs;			//>=0
@@ -92,6 +115,7 @@ typedef struct osXsdElement {
 	union {
 		osXmlComplexType_t* pComplex;
 		osXmlSimpleType_t* pSimple;
+		osXmlAnyElementTag_t elemAnyTag;	//if isElementAny = true
 	};
 	osList_t* pSimpleTypeList;	//Since simpleType objects shall be kept permanently, this can be removed.  Currently this is not used.
 } osXsdElement_t;
@@ -102,10 +126,10 @@ typedef struct {
     osPointerLen_t tag;
     bool isTagDone;                 //the tag is wrapped in one line, i.e., <tag, tag-content />
     bool isEndTag;                  //the line is the end of tag, i.e., </tag>
-    bool isPElement;                //if the union data is pElement, this value is true
+    bool isPElement;                //if the union data is pElement, this value is true.  That happens in <xs:element> xxx </element> or <xs:any> xxx </xs:any>
     union {
-        osList_t attrNVList;        //each list element contains osXmlNameValue_t
-        osXsdElement_t* pElement;   //if tag is xs:element, and contains info other than tag attributes, this data structure will be used
+        osList_t attrNVList;        //each list element contains osXmlNameValue_t, for <xs:element xxx />, <xs:any xxx /> and other xs:xxx cases
+        osXsdElement_t* pElement;   //if tag is xs:element or xs:any, and contains sub tags (i.e., the element and any do not end in one line), this data structure will be used
     };
 } osXmlTagInfo_t;
 
