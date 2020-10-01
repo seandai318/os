@@ -30,37 +30,6 @@
 #define OS_XML_SCHEMA_LEN		9
 
 
-#if 0
-//for function osXml_parseTag()
-typedef enum {
-    OS_XSD_TAG_INFO_START,
-	OS_XSD_TAG_INFO_TAG_COMMENT,
-    OS_XSD_TAG_INFO_BEFORE_TAG_INSIDE_QUOTE,
-    OS_XSD_TAG_INFO_TAG_START,
-    OS_XSD_TAG_INFO_TAG,
-	OS_XSD_TAG_INFO_CONTENT_NAME_START,
-	OS_XSD_TAG_INFO_CONTENT_NAME,
-	OS_XSD_TAG_INFO_CONTENT_NAME_STOP,
-	OS_XSD_TAG_INFO_CONTENT_VALUE_START,
-	OS_XSD_TAG_INFO_CONTENT_VALUE,
-    OS_XSD_TAG_INFO_END_TAG_SLASH,
-} osXsdCheckTagInfoState_e;
-
-
-//this data structure used to help xml parsing against its xsd
-typedef struct osXsd_elemPointer {
-    osXsdElement_t* pCurElem;       //the current working xsd element
-	struct osXsd_elemPointer* pParentXsdPointer;	//the parent xsd pointer
-	int curIdx;						//which idx in assignedChildIdx[] that the xsd element is current processing, used in for the ordering presence of sequence deposition
-    bool  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
-} osXsd_elemPointer_t;
-#endif
-#if 0
-typedef struct ctPointer {
-    osXmlComplexType_t* pCT;
-    int doneListIdx;        //listIdx that has already transversed
-} osXsd_ctPointer_t;
-#endif
 
 
 //static osXsdElement_t* osXsd_getRootElemInfo(osMBuf_t* pXmlBuf);
@@ -844,7 +813,6 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
 {
 	osStatus_e status = OS_STATUS_OK;
 	bool isLeaf = true;
-	bool isLeafOnly = true;		//this parameter will be promoted as a function argument
 
 	if(!pElement || !value || !callbackInfo)
 	{
@@ -855,14 +823,15 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
 	//check if is leaf
 	if(!osXml_isXsdElemSimpleType(pElement) && !(pElement->isElementAny && pElement->anyElem.xmlAnyElem.isLeaf))
 	{
-	    //for isLeafOnly, only forward value to user when the element is a leaf
-		if(isLeafOnly)
+	    //if isLeafOnly==true, only forward value to user when the element is a leaf
+		if(callbackInfo->isLeafOnly)
 		{
 			return status;
 		}
 		else
 		{
 			isLeaf = false;
+			pElement->dataType = OS_XML_DATA_TYPE_COMPLEX;
 		}
 	}
 
@@ -871,7 +840,7 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
         //that requires within xmlData, the dataName has to be sorted from shortest to longest
         if(pElement->elemName.l < callbackInfo->xmlData[i].dataName.l)
         {
-            mdebug(LM_XMLP, "the app does not need element(%r), value=%r, ignore.", &pElement->elemName, value);
+            mdebug(LM_XMLP, "the app does not need element(%r), value=%r, ignore.", &pElement->elemName, isLeaf? value : NULL);
             return status;
         }
 
@@ -919,6 +888,7 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
 				callbackInfo->xmlCallback(&callbackInfo->xmlData[i]);
 				//assign back to the original user expected data type, since callbackInfo->xmlData[i] may be reused if the xml use the same data type multiple times
 				//notice for pElement->isElementAny case, the pElement->dataType is changed, but we do not compare dataType for this case, so do not care
+				//for no leaf element, always set the dataType to OS_XML_DATA_TYPE_COMPLEX, regardless what user set.
 				callbackInfo->xmlData[i].dataType = pElement->dataType;
 			}
             break;
