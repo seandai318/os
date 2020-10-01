@@ -122,13 +122,13 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
 					//for case <xs:any xxx />
 					pElement = oszalloc(sizeof(osXsdElement_t), osXsdElement_cleanup);
 					pElement->isElementAny = true;
-					pElement->elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_STRICT;
+					pElement->anyElem.elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_STRICT;
 
 					status = osXmlElement_getAttrInfo(&pTagInfo->attrNVList, pElement);
-					if(status != OS_STATUS_OK || pElement->elemAnyTag.processContent == OS_XSD_PROCESS_CONTENTS_STRICT || !(pElement->elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_ANY || pElement->elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_OTHER))
+					if(status != OS_STATUS_OK || pElement->anyElem.elemAnyTag.processContent == OS_XSD_PROCESS_CONTENTS_STRICT || !(pElement->anyElem.elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_ANY || pElement->anyElem.elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_OTHER))
 					{
 						osfree(pElement);
-						logError("fails in one of the following: osXmlElement_getAttrInfo() status=%d, processContent=%d, elemNamespace=%d.", status, pElement->elemAnyTag.processContent, pElement->elemAnyTag.elemNamespace);
+						logError("fails in one of the following: osXmlElement_getAttrInfo() status=%d, processContent=%d, elemNamespace=%d.", status, pElement->anyElem.elemAnyTag.processContent, pElement->anyElem.elemAnyTag.elemNamespace);
 						if(status == OS_STATUS_OK)
 						{
 							status = OS_ERROR_INVALID_VALUE;
@@ -137,7 +137,7 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
 					}
 				}
 
-                mdebug(LM_XMLP, "A any element is parsed, minOccurs=%d, maxOccurs=%d, namespace=%d, processContents=%d", pElement->minOccurs, pElement->maxOccurs, pElement->elemAnyTag.elemNamespace, pElement->elemAnyTag.processContent);
+                mdebug(LM_XMLP, "A any element is parsed, minOccurs=%d, maxOccurs=%d, namespace=%d, processContents=%d", pElement->minOccurs, pElement->maxOccurs, pElement->anyElem.elemAnyTag.elemNamespace, pElement->anyElem.elemAnyTag.processContent);
                 osList_append(&pCtInfo->elemList, pElement);
                 isIgnored = false;
             }

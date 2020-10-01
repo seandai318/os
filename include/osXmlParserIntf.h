@@ -21,6 +21,7 @@ typedef enum {
 	OS_XML_DATA_TYPE_NO_XS,		//a collective type that represents  all no XS defined type, like simple and complex
 	OS_XML_DATA_TYPE_SIMPLE,
 	OS_XML_DATA_TYPE_COMPLEX,
+	OS_XML_DATA_TYPE_ANY,		//for elements treated as <xs:any>
 } osXmlDataType_e;
 
 
@@ -37,9 +38,13 @@ typedef struct {
 } osXmlData_t;
 
 
+typedef void (*osXmlDataCallback_h)(osXmlData_t* pXmlData);
+
 
 //app provided info for osXmlDataCallback_h callback
 typedef struct {
+	bool isUseDefault;
+	osXmlDataCallback_h xmlCallback;
 	osXmlData_t* xmlData;
 	int maxXmlDataSize;
 } osXmlDataCallbackInfo_t;
@@ -47,7 +52,7 @@ typedef struct {
 
 
 //get xml leaf node value based on the xsd and xml files
-osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFileName,  bool isUseDefault, osXmlDataCallbackInfo_t* callbackInfo);
+osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFileName, osXmlDataCallbackInfo_t* callbackInfo);
 bool osXml_isXsdValid(osMBuf_t* pXsdBuf);
 bool osXml_isXmlValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osXmlDataCallbackInfo_t* callbackInfo);
 

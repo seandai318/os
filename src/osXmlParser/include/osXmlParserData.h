@@ -97,7 +97,23 @@ typedef struct {
 typedef struct {
 	osXsdAnyElemNS_e elemNamespace;	//for now, only support ##any or ##other
 	osXsdAnyElemPS_e processContent;
-} osXmlAnyElementTag_t;
+} osXsdAnyElementTag_t;
+
+
+
+typedef struct {
+	bool isLeaf;
+	bool isRootAnyElem;
+} osXmlAnyElement_t;
+
+
+typedef struct {
+	bool isXmlAnyElem;	//determine if this is for xsd <xs:any> tag or a xml element
+	union {
+		osXsdAnyElementTag_t elemAnyTag;	//when isXmlElemAny = false
+		osXmlAnyElement_t xmlAnyElem;		//when isXmlElemAny = true
+	};
+} osXmlAnyElemInfo_t;
 
 
 typedef struct osXsdElement {
@@ -115,7 +131,11 @@ typedef struct osXsdElement {
 	union {
 		osXmlComplexType_t* pComplex;
 		osXmlSimpleType_t* pSimple;
+#if 0
 		osXmlAnyElementTag_t elemAnyTag;	//if isElementAny = true
+#else
+		osXmlAnyElemInfo_t anyElem;		//if isElementAny = true
+#endif
 	};
 	osList_t* pSimpleTypeList;	//Since simpleType objects shall be kept permanently, this can be removed.  Currently this is not used.
 } osXsdElement_t;

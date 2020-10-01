@@ -26,6 +26,7 @@ osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirst
 osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pTagInfo);
 osXsdElement_t* osXsd_parseElementAny(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagInfo);
 osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement);
+osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlData_t* pXmlData);
 bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem);
 osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue);
 bool osXml_isDigitType(osXmlDataType_e dataType);

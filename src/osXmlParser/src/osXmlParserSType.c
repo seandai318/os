@@ -51,6 +51,14 @@ static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, 
     //add to the simpleTypeInfo data structure
     switch(pTagInfo->tag.l)
     {
+		case 8:		//len=8, "xs:union"
+			//this function deals with simpleType facet except for this one and "xs:restriction".  Special handling.
+			if(strncmp("xs:union", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+            {
+				//we do not further parse the union member, just assign the base type to be xs:string
+				pSimpleInfo->baseType = OS_XML_DATA_TYPE_XS_STRING;
+ 			}
+			break;
 		case 9:		//len=9, "xs:length"
 			if(strncmp("xs:length", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
 			{
@@ -83,7 +91,7 @@ static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, 
 			switch(pTagInfo->tag.p[3])
 			{
 				case 'r':
-					//this function deals with simpleType facet except for this one, "xs:restriction".  Special handling.
+					//this function deals with simpleType facet except for this one and "xs:union".  Special handling.
 					if(strncmp("xs:restriction", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
             		{
 					    osListElement_t* pLE = pTagInfo->attrNVList.head;
@@ -442,6 +450,7 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
 	switch(pSimple->baseType)
 	{
 		case OS_XML_DATA_TYPE_XS_BOOLEAN:
+			status = osXmlXSType_convertData(&pXmlData->dataName, pValue, OS_XML_DATA_TYPE_XS_BOOLEAN, pXmlData);
 			break;
         case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
     	case OS_XML_DATA_TYPE_XS_SHORT:

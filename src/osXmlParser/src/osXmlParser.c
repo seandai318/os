@@ -19,6 +19,7 @@
 #include "osMisc.h"
 
 #include "osXmlParser.h"
+#include "osXmlParserLib.h"
 #include "osXmlParserCType.h"
 #include "osXmlParserSType.h"
 
@@ -29,7 +30,7 @@
 #define OS_XML_SCHEMA_LEN		9
 
 
-
+#if 0
 //for function osXml_parseTag()
 typedef enum {
     OS_XSD_TAG_INFO_START,
@@ -53,7 +54,7 @@ typedef struct osXsd_elemPointer {
 	int curIdx;						//which idx in assignedChildIdx[] that the xsd element is current processing, used in for the ordering presence of sequence deposition
     bool  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
 } osXsd_elemPointer_t;
-
+#endif
 #if 0
 typedef struct ctPointer {
     osXmlComplexType_t* pCT;
@@ -72,13 +73,13 @@ static osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, bool* isSchemaTagDone)
 static osStatus_e osXsd_browseNode(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo);
 
 static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo);
-static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool isUseDefault, osXmlDataCallbackInfo_t* callbackInfo);
+static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallbackInfo_t* callbackInfo);
 static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagInfo_t* pTagInfo);
 static bool osXml_findWhiteSpace(osMBuf_t* pBuf, bool isAdvancePos);
 static bool osXml_findPattern(osMBuf_t* pXmlBuf, osPointerLen_t* pPattern, bool isAdvancePos);
 static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, osXmlElemDispType_e* pParentXsdDispType, int* listIdx);
 static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer);
-static osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlData_t* pXmlData);
+//static osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlData_t* pXmlData);
 static void osXmlTagInfo_cleanup(void* data);
 
 
@@ -304,7 +305,7 @@ EXIT:
  * isUseDefault: IN, when true, the default value from xsd will be used if a complex type's disposition=sequence/all, =false, default value from xsd will not be checked
  * callbackInfo: OUT, callback data, the xml leaf value will be set there
  */
-static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool isUseDefault, osXmlDataCallbackInfo_t* callbackInfo)
+static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallbackInfo_t* callbackInfo)
 {
     osStatus_e status = OS_STATUS_OK;
     osXmlTagInfo_t* pElemInfo = NULL;
@@ -335,6 +336,8 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool
 		goto EXIT;
 	}
 
+    bool isProcessAnyElem = false;  //for anyElement handling, whether this function is processing the any element block
+	osXsdElement_t* pPrevAnyElem = NULL;	//for anyElem handling
     osXsd_elemPointer_t* pXsdPointer = NULL;
     osXsd_elemPointer_t* pParentXsdPointer = NULL;
 
@@ -378,6 +381,7 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool
 
             osXsdElement_t* pCurXsdElem = ((osXsd_elemPointer_t*)pLE->data)->pCurElem;
 			//parentXsd changes, check the previous parentXsd's elemList to make sure all elements in the list are processed
+			//would not apply to processAnyElem case.  Since in isProcessAnyElem == true case, the parentXsdPointer does not change 
 			if(((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer != pParentXsdPointer)
 			{
 				mdebug(LM_XMLP, "case </%r>, old pParentXsdPointer=%p, old xsdElem=%r, new xsdElem=%r, new pParentXsdPointer=%p", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL, pCurXsdElem ? &pCurXsdElem->elemName : NULL, ((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer);
@@ -419,7 +423,7 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool
 								else
 								{
 									//browse the info for xsd that is not configured in the xml file, inside the function, callback for the default value will be called  
-									if(isUseDefault)
+									if(callbackInfo->isUseDefault)
 									{
 										status = osXsd_browseNode(pXsdElem, callbackInfo);
 										if(status != OS_STATUS_OK)
@@ -478,18 +482,31 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool
                 goto EXIT;
             }
 
-            if(osXml_isXsdElemSimpleType(pCurXsdElem))
+            if(osXml_isXsdElemSimpleType(pCurXsdElem) || isProcessAnyElem)
             {
                 value.l = tagStartPos - value.l;
-			
-				//The data sanity check is performed by callback()
-                status = osXml_xmlCallback(pCurXsdElem, &value, callbackInfo);
-				if(status != OS_STATUS_OK)
+			}
+
+			//The data sanity check is performed by callback()
+            status = osXml_xmlCallback(pCurXsdElem, &value, callbackInfo);
+
+			//for any element, it is not part of xsd, and was dynamically allocated, need to free when it is not needed any more
+			if(isProcessAnyElem)
+			{
+				pPrevAnyElem = NULL;
+				//check if the anyElement processing is done. pCurXsdElem->isElementAny=true, pCurXsdElem->anyElem.isXmlAnyElem=true must have been set
+				if(pCurXsdElem->anyElem.xmlAnyElem.isRootAnyElem)
 				{
-					logError("fails to validate xml for element(%r).", &pCurXsdElem->elemName);
-					osListElement_delete(pLE);
-					goto EXIT;
+					isProcessAnyElem = false;
 				}
+				osfree(pCurXsdElem);
+			}
+
+			if(status != OS_STATUS_OK)
+			{
+				logError("fails to validate xml for element(%r).", &pCurXsdElem->elemName);
+				osListElement_delete(pLE);
+				goto EXIT;
             }
 
 			//end of file check
@@ -529,7 +546,6 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool
             {
                 pXsdPointer->pCurElem = pXsdRootElem;
 				
-
                 if(osPL_cmp(&pElemInfo->tag, &pXsdPointer->pCurElem->elemName) != 0)
                 {
                     logError("the element name in xml (%r) does not match with in xsd (%r).", &pElemInfo->tag, &pXsdPointer->pCurElem->elemName);
@@ -541,97 +557,135 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool
             else
             {
 				osXmlElemDispType_e parentXsdDispType = OS_XML_ELEMENT_DISP_TYPE_ALL;
-                if((pXsdPointer->pCurElem = osXml_getChildXsdElemByTag(&pElemInfo->tag, pParentXsdPointer, &parentXsdDispType, &listIdx)) == NULL)
+
+				//if this function is inside any element processing state, directly allocate the any element object
+				if(isProcessAnyElem)
+				{
+					pXsdPointer->pCurElem = osXsd_createAnyElem(&pElemInfo->tag, false);
+				}
+				else
                 {
-                    logError("the xsd does not have matching tag(%r) does not match with xsd.", &pElemInfo->tag);
-                    osfree(pXsdPointer);
-                    status = OS_ERROR_INVALID_VALUE;
-                    goto EXIT;
+					if((pXsdPointer->pCurElem = osXml_getChildXsdElemByTag(&pElemInfo->tag, pParentXsdPointer, &parentXsdDispType, &listIdx)) == NULL)
+                	{
+						//if a matching child element does not found, check if the parent xsd element contains any element
+						//this happens for the first element going into the anyElement processing
+						if(isExistXsdAnyElem(pParentXsdPointer))
+						{
+							pXsdPointer->pCurElem = osXsd_createAnyElem(&pElemInfo->tag, true);	//true here indicate it is the root anyElem, isRootAnyElem = true
+							isProcessAnyElem = true;
+						
+							mdebug(LM_XMLP, "created a xml element for a processContents=\"lax\" tag(%r), set isProcessAnyElem=true.", &pElemInfo->tag);  
+						}
+						else
+						{
+                    		logError("the xsd does not have matching tag(%r) does not match with xsd.", &pElemInfo->tag);
+                    		osfree(pXsdPointer);
+                    		status = OS_ERROR_INVALID_VALUE;
+                    		goto EXIT;
+						}
+					}
                 }
 
-				//check OS_XML_ELEMENT_DISP_TYPE_SEQUENCE case to make sure the element is ordered
-				if(parentXsdDispType == OS_XML_ELEMENT_DISP_TYPE_SEQUENCE)
+				//if this is a <xs:any> element
+				if(pXsdPointer->pCurElem->isElementAny)
 				{
-					if(listIdx == pParentXsdPointer->curIdx)
+					mdebug(LM_XMLP, "pCurElem->isElementAny=true, isProcessAnyElem=%d, pPrevAnyElem=%p, pParentXsdPointer=%p.", isProcessAnyElem, pPrevAnyElem, pParentXsdPointer);
+
+					if(pPrevAnyElem)
 					{
-						//the idx pElemInfo equals to what the current element that pParentXsdPointer expects to process, do nothing
+						pPrevAnyElem->anyElem.xmlAnyElem.isLeaf = false;
 					}
-					else if(listIdx > pParentXsdPointer->curIdx)
+					pPrevAnyElem = pXsdPointer->pCurElem;
+				}
+				else
+				{
+					//check OS_XML_ELEMENT_DISP_TYPE_SEQUENCE case to make sure the element is ordered
+					if(parentXsdDispType == OS_XML_ELEMENT_DISP_TYPE_SEQUENCE)
 					{
-						//there is gap between the pElemInfo and the current element that pParentXsdPointer expects to process, meaning, some elements
-						//specified in the complex type of the parent element in xsd is missed in the xml
-                        osXmlComplexType_t* pParentCT = osXsdPointer_getCT(pParentXsdPointer);
-                        if(!pParentCT)
-                        {
-                            logError("Parent xsd element is not a Complex type.");
-                    		osfree(pXsdPointer);
-                            status = OS_ERROR_INVALID_VALUE;
-                            goto EXIT;
-                        }
-
-						//check the element in front of the curElem
-						for(int i=pParentXsdPointer->curIdx; i<listIdx; i++)
+						if(listIdx == pParentXsdPointer->curIdx)
 						{
-							if(pParentXsdPointer->assignedChildIdx[i] == 0)
-							{
-								osXsdElement_t* pXsdElem = osList_getDataByIdx(&pParentCT->elemList, pParentXsdPointer->curIdx);
-		                        if(!pXsdElem)
-        		                {
-                		            logError("elemList idx(%d) does not have xsd element data, this shall never happen.", pParentXsdPointer->curIdx);
-									osfree(pXsdPointer);
-                        		    goto EXIT;
-                        		}
+							//the idx pElemInfo equals to what the current element that pParentXsdPointer expects to process, do nothing
+						}
+						else if(listIdx > pParentXsdPointer->curIdx)
+						{
+							//there is gap between the pElemInfo and the current element that pParentXsdPointer expects to process, meaning, some elements
+							//specified in the complex type of the parent element in xsd is missed in the xml
+                        	osXmlComplexType_t* pParentCT = osXsdPointer_getCT(pParentXsdPointer);
+                        	if(!pParentCT)
+                        	{
+                            	logError("Parent xsd element is not a Complex type.");
+                    			osfree(pXsdPointer);
+                            	status = OS_ERROR_INVALID_VALUE;
+                            	goto EXIT;
+                        	}
 
-                        		if(pXsdElem->minOccurs == 0)
+							//check the element in front of the pXsdPointer->pCurElem
+							for(int i=pParentXsdPointer->curIdx+1; i<listIdx; i++)
+							{
+								if(pParentXsdPointer->assignedChildIdx[i] == 0)
 								{
-                                    //browse the info for xsd that is not configured in the xml file.  Inside the function, callback for the default value will be called
-                                    if(isUseDefault)
+									osXsdElement_t* pXsdElem = osList_getDataByIdx(&pParentCT->elemList, i);
+		                        	if(!pXsdElem)
+        		                	{
+                		            	logError("elemList idx(%d) does not have xsd element data, this shall never happen.", pParentXsdPointer->curIdx);
+										osfree(pXsdPointer);
+                        		    	goto EXIT;
+                        			}
+
+                        			if(pXsdElem->minOccurs == 0)
 									{
-										status = osXsd_browseNode(pXsdElem, callbackInfo);
-										if(status != OS_STATUS_OK)
+                                    	//browse the info for xsd that is not configured in the xml file.  Inside the function, callback for the default value will be called
+                                    	if(callbackInfo->isUseDefault)
 										{
-											osfree(pXsdPointer);
-											goto EXIT;
+											status = osXsd_browseNode(pXsdElem, callbackInfo);
+											if(status != OS_STATUS_OK)
+											{
+												osfree(pXsdPointer);
+												goto EXIT;
+											}
 										}
 									}
+									else
+									{
+		                            	logError("curidx=%d, element(%r) minOccurs=%d, and the parent CT is sequence disposition type, but the element does not show up before the current idx(%d).", i, &pXsdElem->elemName, pXsdElem->minOccurs, listIdx);
+										osfree(pXsdPointer);
+        		                    	status = OS_ERROR_INVALID_VALUE;
+                		            	goto EXIT;
+                        			}
 								}
-								else
-								{
-		                            logError("element(%r) minOccurs=%d, and the parent CT is sequence disposition type, but it does not show up before idx(%d).", &pXsdElem->elemName, pXsdElem->minOccurs, listIdx);
-									osfree(pXsdPointer);
-        		                    status = OS_ERROR_INVALID_VALUE;
-                		            goto EXIT;
-                        		}
 							}
+							pParentXsdPointer->curIdx = listIdx;
 						}
-						pParentXsdPointer->curIdx = listIdx;
-					}
-					else
-					{
-						logError("get a listIdx(%d) that is smaller than the current idx(%d), and the parent CT is sequence ddisposition type.", listIdx, pParentXsdPointer->curIdx);
-						osfree(pXsdPointer);
-                        status = OS_ERROR_INVALID_VALUE;
-                        goto EXIT;
-					}
-				}
-				//check the maximum element occurrence is not exceeded
-				++pParentXsdPointer->assignedChildIdx[listIdx];
-				mdebug(LM_XMLP, "pParentXsdPointer->assignedChildIdx[%d]=%d", listIdx, pParentXsdPointer->assignedChildIdx[listIdx]);
-				if(pXsdPointer->pCurElem->maxOccurs != -1 && pParentXsdPointer->assignedChildIdx[listIdx] > pXsdPointer->pCurElem->maxOccurs)
-				{
-					logError("the element(%r) exceeds the maxOccurs(%d).", &pXsdPointer->pCurElem->elemName, pXsdPointer->pCurElem->maxOccurs);
-					status = OS_ERROR_INVALID_VALUE;
-					osfree(pXsdPointer);
-					goto EXIT;
-				}
-            }
+						else
+						{
+							logError("get a listIdx(%d) that is smaller than the current idx(%d), and the parent CT is sequence ddisposition type.", listIdx, pParentXsdPointer->curIdx);
+							osfree(pXsdPointer);
+                        	status = OS_ERROR_INVALID_VALUE;
+                        	goto EXIT;
+						}
+					} //if(parentXsdDispType == OS_XML_ELEMENT_DISP_TYPE_SEQUENCE)
 
-            if(osXml_isXsdElemSimpleType(pXsdPointer->pCurElem))
-            {
+					//check the maximum element occurrence is not exceeded
+					++pParentXsdPointer->assignedChildIdx[listIdx];
+					mdebug(LM_XMLP, "pParentXsdPointer->assignedChildIdx[%d]=%d", listIdx, pParentXsdPointer->assignedChildIdx[listIdx]);
+					if(pXsdPointer->pCurElem->maxOccurs != -1 && pParentXsdPointer->assignedChildIdx[listIdx] > pXsdPointer->pCurElem->maxOccurs)
+					{
+						logError("the element(%r) exceeds the maxOccurs(%d).", &pXsdPointer->pCurElem->elemName, pXsdPointer->pCurElem->maxOccurs);
+						status = OS_ERROR_INVALID_VALUE;
+						osfree(pXsdPointer);
+						goto EXIT;
+					}
+            	} //if(pXsdPointer->pCurElem->isElementAny)
+            } //if(!pParentXsdPointer)
+
+			//for a <xs:any> element, do not move pParentXsdPointer since we do not have xsd, so treate it as a leaf node.  
+			//whether it is a true leaf element will be determined when processing </xxx>
+	        if(osXml_isXsdElemSimpleType(pXsdPointer->pCurElem) || pXsdPointer->pCurElem->isElementAny)
+    	    {
 				//set value.l to memorize the beginning of value, to be used when parsing </xxx>. 
-                value.p = &pBuf->buf[pBuf->pos];
-                value.l = pBuf->pos;
-            }
+           	    value.p = &pBuf->buf[pBuf->pos];
+               	value.l = pBuf->pos;
+           	}
 			else
 			{
 				pParentXsdPointer = pXsdPointer;
@@ -639,8 +693,8 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, bool
 			}
 
             osList_append(&xsdElemPointerList, pXsdPointer);
-        }
-    }
+        } //if(pElemInfo->isEndTag)
+    } //while(pBuf->pos < pBuf->end)
 
 EXIT:
 	osList_delete(&xsdElemPointerList);
@@ -687,7 +741,7 @@ bool osXml_isXmlValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osXmlDataCallbackInf
         return false;
     }
 
-    if(osXml_parse(pXmlBuf, pXsdRoot, true, callbackInfo) != OS_STATUS_OK)
+    if(osXml_parse(pXmlBuf, pXsdRoot, callbackInfo) != OS_STATUS_OK)
 	{
 		logError("fails to osXml_parse(), xmlBuf pos=%ld.", pXmlBuf->pos);
 		return false;
@@ -706,7 +760,7 @@ bool osXml_isXmlValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osXmlDataCallbackInf
  * isUseDefault: IN, when true, the default value from xsd will be used if a complex type's disposition=sequence/all, =false, default value from xsd will not be checked
  * callbackInfo: OUT, callback data, the xml leaf value will be set there
  */
-osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFileName, bool isUseDefault, osXmlDataCallbackInfo_t* callbackInfo)
+osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFileName, osXmlDataCallbackInfo_t* callbackInfo)
 {
     osStatus_e status = OS_STATUS_OK;
     osMBuf_t* xsdMBuf = NULL;
@@ -764,7 +818,7 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
     }
 
 	logInfo("start xml parse for %s.", xmlFileName);
-    status = osXml_parse(xmlBuf, pXsdRoot, isUseDefault, callbackInfo);
+    status = osXml_parse(xmlBuf, pXsdRoot, callbackInfo);
 	if(status != OS_STATUS_OK)
 	{
 		logError("xml parse for %s failed.", xmlFileName);
@@ -789,6 +843,28 @@ EXIT:
 static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo)
 {
 	osStatus_e status = OS_STATUS_OK;
+	bool isLeaf = true;
+	bool isLeafOnly = true;		//this parameter will be promoted as a function argument
+
+	if(!pElement || !value || !callbackInfo)
+	{
+		logError("null pointer, pElement=%p, value=%p, callbackInfo=%p.", pElement, value, callbackInfo);
+		return OS_ERROR_NULL_POINTER;
+	}
+
+	//check if is leaf
+	if(!osXml_isXsdElemSimpleType(pElement) && !(pElement->isElementAny && pElement->anyElem.xmlAnyElem.isLeaf))
+	{
+	    //for isLeafOnly, only forward value to user when the element is a leaf
+		if(isLeafOnly)
+		{
+			return status;
+		}
+		else
+		{
+			isLeaf = false;
+		}
+	}
 
     for(int i=0; i<callbackInfo->maxXmlDataSize; i++)
     {
@@ -802,40 +878,58 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
         //find the matching data name
         if(osPL_cmp(&pElement->elemName, &callbackInfo->xmlData[i].dataName) == 0)
         {
-			//check the dataType
-            if(pElement->dataType != callbackInfo->xmlData[i].dataType)
-            {
-                logError("the element(%r) data type=%d, but the user expects data type=%d", &pElement->elemName, pElement->dataType, callbackInfo->xmlData[i].dataType);
-                return OS_ERROR_INVALID_VALUE;
-            }
+			if(isLeaf)
+			{
+				if(pElement->isElementAny)
+				{
+					pElement->dataType = OS_XML_DATA_TYPE_XS_STRING;
+				}
+				else
+				{
+					//check the dataType
+            		if(pElement->dataType != callbackInfo->xmlData[i].dataType)
+            		{
+                		logError("the element(%r) data type=%d, but the user expects data type=%d", &pElement->elemName, pElement->dataType, callbackInfo->xmlData[i].dataType);
+                		return OS_ERROR_INVALID_VALUE;
+            		}
+				}
 
-    		switch(pElement->dataType)
-    		{
-        		case OS_XML_DATA_TYPE_XS_BOOLEAN:
-        		case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
-        		case OS_XML_DATA_TYPE_XS_SHORT:
-        		case OS_XML_DATA_TYPE_XS_INTEGER:
-        		case OS_XML_DATA_TYPE_XS_LONG:
-        		case OS_XML_DATA_TYPE_XS_STRING:
-                	return osXmlXSType_convertData(&pElement->elemName, value, pElement->dataType, &callbackInfo->xmlData[i]);
-            		break;
-        		case OS_XML_DATA_TYPE_SIMPLE: 
-					return osXmlSimpleType_convertData(pElement->pSimple, value, &callbackInfo->xmlData[i]);
-					break;
-				default: 
-                    logError("unexpected data type(%d) for element(%r).", pElement->dataType, &pElement->elemName);
-                    return OS_ERROR_INVALID_VALUE;
-                    break;
-            }
+    			switch(pElement->dataType)
+    			{
+        			case OS_XML_DATA_TYPE_XS_BOOLEAN:
+        			case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
+        			case OS_XML_DATA_TYPE_XS_SHORT:
+        			case OS_XML_DATA_TYPE_XS_INTEGER:
+        			case OS_XML_DATA_TYPE_XS_LONG:
+        			case OS_XML_DATA_TYPE_XS_STRING:
+                		status = osXmlXSType_convertData(&pElement->elemName, value, pElement->dataType, &callbackInfo->xmlData[i]);
+            			break;
+        			case OS_XML_DATA_TYPE_SIMPLE: 
+						status = osXmlSimpleType_convertData(pElement->pSimple, value, &callbackInfo->xmlData[i]);
+						break;
+					default: 
+                    	logError("unexpected data type(%d) for element(%r).", pElement->dataType, &pElement->elemName);
+                    	return OS_ERROR_INVALID_VALUE;
+                    	break;
+            	}
+			}
+
+			if(callbackInfo->xmlCallback)
+			{
+				callbackInfo->xmlCallback(&callbackInfo->xmlData[i]);
+				//assign back to the original user expected data type, since callbackInfo->xmlData[i] may be reused if the xml use the same data type multiple times
+				//notice for pElement->isElementAny case, the pElement->dataType is changed, but we do not compare dataType for this case, so do not care
+				callbackInfo->xmlData[i].dataType = pElement->dataType;
+			}
             break;
         }
-    }
+    } //for(int i=0; i<callbackInfo->maxXmlDataSize; i++)
 
 	return status;
 }
 
 
-static osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlData_t* pXmlData)
+osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlData_t* pXmlData)
 {
     osStatus_e status = OS_STATUS_OK;
 
@@ -847,8 +941,16 @@ static osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen
 
     switch (dataType)
     {
+		//boolean can take the form of 1, 0, "true", "false"
         case OS_XML_DATA_TYPE_XS_BOOLEAN:
-            pXmlData->xmlIsTrue = strncmp("true", value->p, value->l) == 0 ? true : false;
+			if(value->l == 1)
+			{
+				pXmlData->xmlIsTrue = value->p[0] == 0x31 ? true : false;
+			}
+			else
+			{
+            	pXmlData->xmlIsTrue = strncmp("true", value->p, value->l) == 0 ? true : false;
+			}
             mlogInfo(LM_XMLP, "xmlData.dataName = %r, value=%s", elemName, pXmlData->xmlIsTrue ? "true" : "false");
             break;
 		case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
@@ -1407,13 +1509,13 @@ osXsdElement_t* osXsd_parseElementAny(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTa
 
     pElement = oszalloc(sizeof(osXsdElement_t), osXsdElement_cleanup);
     pElement->isElementAny = true;
-    pElement->elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_STRICT;
+    pElement->anyElem.elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_STRICT;
 
     status = osXmlElement_getAttrInfo(&pElemTagInfo->attrNVList, pElement);
-    if(status != OS_STATUS_OK || pElement->elemAnyTag.processContent == OS_XSD_PROCESS_CONTENTS_STRICT || !(pElement->elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_ANY || pElement->elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_OTHER))
+    if(status != OS_STATUS_OK || pElement->anyElem.elemAnyTag.processContent == OS_XSD_PROCESS_CONTENTS_STRICT || !(pElement->anyElem.elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_ANY || pElement->anyElem.elemAnyTag.elemNamespace == OS_XSD_NAME_SPACE_OTHER))
     {
     	osfree(pElement);
-        logError("fails in one of the following: osXmlElement_getAttrInfo() status=%d, processContent=%d, elemNamespace=%d.", status, pElement->elemAnyTag.processContent, pElement->elemAnyTag.elemNamespace);
+        logError("fails in one of the following: osXmlElement_getAttrInfo() status=%d, processContent=%d, elemNamespace=%d.", status, pElement->anyElem.elemAnyTag.processContent, pElement->anyElem.elemAnyTag.elemNamespace);
         if(status == OS_STATUS_OK)
         {
         	status = OS_ERROR_INVALID_VALUE;
@@ -1549,11 +1651,11 @@ osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElemen
 				{
 					if(pNV->value.l == 5 && osPL_strcmp(&pNV->value, "##any") ==0)
 					{
-						 pElement->elemAnyTag.elemNamespace = OS_XSD_NAME_SPACE_ANY;
+						 pElement->anyElem.elemAnyTag.elemNamespace = OS_XSD_NAME_SPACE_ANY;
 					}
 					else if(pNV->value.l == 7 && osPL_strcmp(&pNV->value, "##other") == 0)
 					{
-						pElement->elemAnyTag.elemNamespace = OS_XSD_NAME_SPACE_OTHER; 
+						pElement->anyElem.elemAnyTag.elemNamespace = OS_XSD_NAME_SPACE_OTHER; 
 					}
 					else
 					{
@@ -1652,11 +1754,11 @@ osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElemen
 				{
 					if(osPL_strcmp(&pNV->value, "lax") == 0)
 					{
-						pElement->elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_LAX;
+						pElement->anyElem.elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_LAX;
 					}
 					else if(osPL_strcmp(&pNV->value, "skip") == 0)
 					{
-						pElement->elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_SKIP;
+						pElement->anyElem.elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_SKIP;
 					}
 					else
 					{
@@ -1700,7 +1802,6 @@ static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagI
  */
 osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos) 
 {
-	DEBUG_BEGIN
 	osStatus_e status = OS_STATUS_OK;
     osXmlTagInfo_t* pTagInfo = NULL;
 
@@ -1968,7 +2069,6 @@ EXIT:
 
 	*ppTagInfo = pTagInfo;
 
-	DEBUG_END
 	return status;
 }
 
@@ -2152,6 +2252,7 @@ static bool osXml_isXsdElemXSType(osXsdElement_t* pXsdElem)
 		case OS_XML_DATA_TYPE_NO_XS:
 		case OS_XML_DATA_TYPE_SIMPLE:
 		case OS_XML_DATA_TYPE_COMPLEX:
+		case OS_XML_DATA_TYPE_ANY:
 			return false;
             break;
         default:
@@ -2175,6 +2276,7 @@ bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem)
         case OS_XML_DATA_TYPE_INVALID:
         case OS_XML_DATA_TYPE_NO_XS:
         case OS_XML_DATA_TYPE_COMPLEX:
+        case OS_XML_DATA_TYPE_ANY:
             return false;
             break;
         default:
@@ -2307,6 +2409,7 @@ bool osXml_isXSSimpleType(osXmlDataType_e dataType)
         case OS_XML_DATA_TYPE_NO_XS:
         case OS_XML_DATA_TYPE_SIMPLE:
         case OS_XML_DATA_TYPE_COMPLEX:
+        case OS_XML_DATA_TYPE_ANY:
             return false;
             break;
         default:
