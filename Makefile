@@ -50,6 +50,7 @@ clean: osxmlparserclean
 	rm -f $(dep) $(obj) $(OBJ_DIR)/*.a $(OBJ_DIR)/*.o $(OBJ_DIR)/*.d 
 
 .PHONY:	osxmlparserclean
+osxmlparserclean:
 	cd  $(XML_OBJ_DIR); rm -f *.o *.a *.d; cd -
 
 .PHONY: cleandep
