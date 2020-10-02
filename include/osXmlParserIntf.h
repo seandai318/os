@@ -43,7 +43,7 @@ typedef void (*osXmlDataCallback_h)(osXmlData_t* pXmlData);
 
 //app provided info for osXmlDataCallback_h callback
 typedef struct {
-	bool isLeafOnly;		//whether app only wants leaf node value
+	bool isAllowNoLeaf;		//whether app only wants leaf node value or also wants xml module to notify the prsence of a no leaf node
 	bool isUseDefault;		//whether app wants to use the default value for elements that have xsd minOccurs=0 and not appear in xml file
 	osXmlDataCallback_h xmlCallback;	//if !NULL, the xml module will call this function each time a matching xml element is found, otherwise, the values will be stored in xmlData
 	osXmlData_t* xmlData;

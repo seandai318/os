@@ -663,7 +663,7 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXm
 			}
 
             //only perform NULL value osXml_xmlCallback() when the element is not a leaf or is <xs:any> element, be note at that time we do not know if a <xs:any> element is a leaf
-            if(!osXml_isXsdElemSimpleType(pXsdPointer->pCurElem) || pXsdPointer->pCurElem->isElementAny)
+            if(callbackInfo->isAllowNoLeaf && (!osXml_isXsdElemSimpleType(pXsdPointer->pCurElem) || pXsdPointer->pCurElem->isElementAny))
             {
                 //The data sanity check is performed by callback()
                 status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, callbackInfo);
@@ -832,30 +832,7 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
 		return OS_ERROR_NULL_POINTER;
 	}
 
-	//check if is a leaf
-#if 0
-	if(osXml_isXsdElemSimpleType(pElement) || (pElement->isElementAny && pElement->anyElem.xmlAnyElem.isLeaf))
-	{
-		if(osXml_isXsdElemSimpleType(pElement))
-		{
-			logError("the element(%r) is a leaf, but there is no value.", &pElement->elemName);
-			return OS_ERROR_INVALID_VALUE;
-		}
-	}
-	else
-	{
-	    //if isLeafOnly==true, only forward value to user when the element is a leaf
-		if(callbackInfo->isLeafOnly && !value)
-		{
-			return status;
-		}
-		else
-		{
-			isLeaf = false;
-			pElement->dataType = OS_XML_DATA_TYPE_COMPLEX;
-		}
-	}
-#endif
+	//leaf related check
 	if(value)
 	{
 		if(!osXml_isXsdElemSimpleType(pElement) && !(pElement->isElementAny && pElement->anyElem.xmlAnyElem.isLeaf))
@@ -873,7 +850,7 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
             return OS_ERROR_INVALID_VALUE;
         }
 
-		if(callbackInfo->isLeafOnly)
+		if(!callbackInfo->isAllowNoLeaf)
 		{
 			return status;
 		}
