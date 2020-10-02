@@ -451,13 +451,14 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXm
                 goto EXIT;
             }
 
-            if(osXml_isXsdElemSimpleType(pCurXsdElem) || isProcessAnyElem)
+			//only perform no NULL value osXml_xmlCallback() when the element is a leaf
+            if(osXml_isXsdElemSimpleType(pCurXsdElem) || (pCurXsdElem->isElementAny && pCurXsdElem->anyElem.xmlAnyElem.isLeaf))
             {
                 value.l = tagStartPos - value.l;
-			}
 
-			//The data sanity check is performed by callback()
-            status = osXml_xmlCallback(pCurXsdElem, &value, callbackInfo);
+				//The data sanity check is performed by callback()
+            	status = osXml_xmlCallback(pCurXsdElem, &value, callbackInfo);
+			}
 
 			//for any element, it is not part of xsd, and was dynamically allocated, need to free when it is not needed any more
 			if(isProcessAnyElem)
@@ -661,6 +662,13 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXm
 				mdebug(LM_XMLP, "case <%r>, new pParentXsdPointer=%p, new pParentXsdPointer.elem=%r", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL);
 			}
 
+            //only perform NULL value osXml_xmlCallback() when the element is not a leaf or is <xs:any> element, be note at that time we do not know if a <xs:any> element is a leaf
+            if(!osXml_isXsdElemSimpleType(pXsdPointer->pCurElem) || pXsdPointer->pCurElem->isElementAny)
+            {
+                //The data sanity check is performed by callback()
+                status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, callbackInfo);
+            }
+
             osList_append(&xsdElemPointerList, pXsdPointer);
         } //if(pElemInfo->isEndTag)
     } //while(pBuf->pos < pBuf->end)
@@ -809,22 +817,35 @@ EXIT:
 }
 
 
+/* this function can be called for leaf or no leaf, for no leaf, it is expected to be called in the xml element start, like <xs:xxx>
+ * a xml element stop is like </xs:xxx>.  For called in xml start, the value shall be set to NULL
+ */
 static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo)
 {
 	osStatus_e status = OS_STATUS_OK;
 	bool isLeaf = true;
 
-	if(!pElement || !value || !callbackInfo)
+	//as mentioned, value can be NULL
+	if(!pElement || !callbackInfo)
 	{
-		logError("null pointer, pElement=%p, value=%p, callbackInfo=%p.", pElement, value, callbackInfo);
+		logError("null pointer, pElement=%p, callbackInfo=%p.", pElement, callbackInfo);
 		return OS_ERROR_NULL_POINTER;
 	}
 
-	//check if is leaf
-	if(!osXml_isXsdElemSimpleType(pElement) && !(pElement->isElementAny && pElement->anyElem.xmlAnyElem.isLeaf))
+	//check if is a leaf
+#if 0
+	if(osXml_isXsdElemSimpleType(pElement) || (pElement->isElementAny && pElement->anyElem.xmlAnyElem.isLeaf))
+	{
+		if(osXml_isXsdElemSimpleType(pElement))
+		{
+			logError("the element(%r) is a leaf, but there is no value.", &pElement->elemName);
+			return OS_ERROR_INVALID_VALUE;
+		}
+	}
+	else
 	{
 	    //if isLeafOnly==true, only forward value to user when the element is a leaf
-		if(callbackInfo->isLeafOnly)
+		if(callbackInfo->isLeafOnly && !value)
 		{
 			return status;
 		}
@@ -834,6 +855,38 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
 			pElement->dataType = OS_XML_DATA_TYPE_COMPLEX;
 		}
 	}
+#endif
+	if(value)
+	{
+		if(!osXml_isXsdElemSimpleType(pElement) && !(pElement->isElementAny && pElement->anyElem.xmlAnyElem.isLeaf))
+		{
+			logError("a no leaf element(%r) has a value(%r)", &pElement->elemName, value);
+			return OS_ERROR_INVALID_VALUE;
+		}
+	}
+	else
+	{
+		//in value==0 stage, a <xs:any> element has not determined if it is a leaf, but a xs type element already know from the previous parsed xsd
+        if(osXml_isXsdElemSimpleType(pElement))
+        {
+            logError("the element(%r) is a leaf, but there is no value.", &pElement->elemName);
+            return OS_ERROR_INVALID_VALUE;
+        }
+
+		if(callbackInfo->isLeafOnly)
+		{
+			return status;
+		}
+
+		isLeaf = false;
+#if 0
+		if(pElement->isElementAny)
+		{
+			pElement->dataType = OS_XML_DATA_TYPE_COMPLEX;
+		}
+#endif
+    }
+
 
     for(int i=0; i<callbackInfo->maxXmlDataSize; i++)
     {
@@ -847,7 +900,9 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
         //find the matching data name
         if(osPL_cmp(&pElement->elemName, &callbackInfo->xmlData[i].dataName) == 0)
         {
-			if(isLeaf)
+            osXmlDataType_e origElemDataType = pElement->dataType;
+
+			if(isLeaf && value)
 			{
 				if(pElement->isElementAny)
 				{
@@ -887,9 +942,7 @@ static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* va
 			{
 				callbackInfo->xmlCallback(&callbackInfo->xmlData[i]);
 				//assign back to the original user expected data type, since callbackInfo->xmlData[i] may be reused if the xml use the same data type multiple times
-				//notice for pElement->isElementAny case, the pElement->dataType is changed, but we do not compare dataType for this case, so do not care
-				//for no leaf element, always set the dataType to OS_XML_DATA_TYPE_COMPLEX, regardless what user set.
-				callbackInfo->xmlData[i].dataType = pElement->dataType;
+				callbackInfo->xmlData[i].dataType = origElemDataType;
 			}
             break;
         }
@@ -944,6 +997,8 @@ osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen_t* val
             return OS_ERROR_INVALID_VALUE;
             break;
     }
+
+	pXmlData->dataType = dataType;
 
     return status;
 }
