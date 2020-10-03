@@ -131,11 +131,7 @@ typedef struct osXsdElement {
 	union {
 		osXmlComplexType_t* pComplex;
 		osXmlSimpleType_t* pSimple;
-#if 0
-		osXmlAnyElementTag_t elemAnyTag;	//if isElementAny = true
-#else
 		osXmlAnyElemInfo_t anyElem;		//if isElementAny = true
-#endif
 	};
 	osList_t* pSimpleTypeList;	//Since simpleType objects shall be kept permanently, this can be removed.  Currently this is not used.
 } osXsdElement_t;

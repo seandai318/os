@@ -466,7 +466,7 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
             	logError("falis to convert simpleType(%r) value(%r).", &pSimple->typeName, pValue);
                 goto EXIT;
 			}
-			
+
 			osListElement_t* pLE = pSimple->facetList.head;
 			while(pLE)
 			{
