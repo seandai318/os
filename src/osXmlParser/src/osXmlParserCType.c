@@ -17,6 +17,7 @@
 
 #include "osXmlParser.h"
 #include "osXmlParserCType.h"
+#include "osXmlParserLib.h"
 
 
 static osStatus_e osXsdComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplexType_t* pCtInfo);
@@ -101,15 +102,23 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
 
 	//add to the complexTypeInfo data structure
 	bool isIgnored = true;
-	switch(pTagInfo->tag.l)
+	osPointerLen_t* pXsAlias = osXsd_getXSAlias();	//if the alias is not empty, pXsAlias contains ':', otherwise, pXsAlias->l=0.   
+	if(strncmp(pTagInfo->tag.p, pXsAlias->p, pXsAlias->l) != 0)
 	{
-		case 6:			//len=6, "xs:all", "xs:any"
-			if(strncmp("xs:all", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+		logError("tag(%r) does not contain XS alias(%r).", &pTagInfo->tag, pXsAlias);
+		status = OS_ERROR_INVALID_VALUE;
+		goto EXIT;
+	}
+
+	switch(pTagInfo->tag.l - pXsAlias->l)
+	{
+		case 3:			//len=4, "all", "any"
+			if(strncmp("all", &pTagInfo->tag.p[pXsAlias->l], 3) == 0)
 			{
 				pCtInfo->elemDispType = OS_XML_ELEMENT_DISP_TYPE_ALL;
 				isIgnored = false;
 			}
-			else if(strncmp("xs:any", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+			else if(strncmp("any", &pTagInfo->tag.p[pXsAlias->l], 3) == 0)
 			{
                 osXsdElement_t* pElement;
 				//for case <xs:any> ... </xs:any>.  In that case, isPElement will be set
@@ -142,15 +151,15 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
                 isIgnored = false;
             }
 			break;
-		case 9:			//len=9, "xs:choice"
-			if(strncmp("xs:choice", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+		case 6:			//len=6, "choice"
+			if(strncmp("choice", &pTagInfo->tag.p[pXsAlias->l], 6) == 0)
 			{
 				pCtInfo->elemDispType = OS_XML_ELEMENT_DISP_TYPE_SEQUENCE;
 				isIgnored = false;
 			}
 			break;
-		case 10:		//len=10, "xs:element"
-			if(strncmp("xs:element", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+		case 7:		//len=7, "element"
+			if(strncmp("element", &pTagInfo->tag.p[pXsAlias->l], 7) == 0)
     		{
 				osXsdElement_t* pElement;
                 //for case <xs:element> ... </xs:element>.  In that case, isPElement will be set
@@ -170,8 +179,8 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
                 isIgnored = false;
     		}
 			break;
-		case 11:		//len=11, "xs:sequence"
-			if(strncmp("xs:sequence", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+		case 8:		//len=8, "sequence"
+			if(strncmp("sequence", &pTagInfo->tag.p[pXsAlias->l], 8) == 0)
 			{
 				pCtInfo->elemDispType = OS_XML_ELEMENT_DISP_TYPE_SEQUENCE;
                 isIgnored = false;
@@ -227,7 +236,7 @@ osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pC
             if(!pLE)
             {
             	//"xs:complexType" was not pushed into tagList, so it is possible the end tag is "xs:complexType"
-                if(strncmp("xs:complexType", pTagInfo->tag.p, pTagInfo->tag.l))
+				if(osXml_xsTagCmp("complexType", 11, &pTagInfo->tag))
                 {
                 	logError("expect the end tag for xs:complexType, but %r is found.", &((osXmlTagInfo_t*)pLE->data)->tag);
             		status = OS_ERROR_INVALID_VALUE;
@@ -280,7 +289,7 @@ osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pC
         else
         {
         	//for case <xs:element xxx> ... </xs:element>.  For case <xs:element xxx />, it is handled in pTagInfo->isTagDone case.
-            if(pTagInfo->tag.l == 10 && strncmp("xs:element", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+			if(osXml_xsTagCmp("element", 7, &pTagInfo->tag) == 0)
             {
             	osXsdElement_t* pElem = osXsd_parseElement(pXmlBuf, pTagInfo);
                 if(!pElem)
@@ -299,7 +308,7 @@ osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pC
 				osfree(pTagInfo);
             }
 			//for case <xs:any> (annotation?) </xs:any>.  for case <xs:any xxx />, it is handled in pTagInfo->isTagDone case.
-            else if(pTagInfo->tag.l == 6 && strncmp("xs:any", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+            else if(osXml_xsTagCmp("any", 3, &pTagInfo->tag) == 0)
             {
 				osXsdElement_t* pElem = osXsd_parseElementAny(pXmlBuf, pTagInfo);
 				if(!pElem)

@@ -75,6 +75,7 @@ int osPL_strdup(char **dst, const osPointerLen_t *src);
 int osDPL_dup(osDPointerLen_t *dst, const osPointerLen_t *src);
 osPointerLen_t osPL_clone(const osPointerLen_t* pl);
 //osPointerLen_t osPL_cloneRef(const osPointerLen_t* pl);
+int osPL_strplcmp(const char *str, int len, const osPointerLen_t *pl, bool isMatchLen);
 int osPL_strcmp(const osPointerLen_t *pl, const char *str);
 int osPL_strcasecmp(const osPointerLen_t *pl, const char *str);
 int osPL_cmp(const osPointerLen_t *pl1, const osPointerLen_t *pl2);

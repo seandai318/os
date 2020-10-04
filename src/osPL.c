@@ -535,6 +535,29 @@ int osDPL_dup(osDPointerLen_t *dst, const osPointerLen_t *src)
 }
 
 
+int osPL_strplcmp(const char *str, int len, const osPointerLen_t *pl, bool isMatchLen)
+{
+	if(!str || !pl)
+	{
+		return -1;
+	}
+
+	if(isMatchLen)
+	{
+		if(pl->l != len)
+		{
+			return -1;
+		}
+	} 
+	else if(pl->l < len)
+	{
+		return -1;
+	}
+
+	return memcmp(str, pl->p, len) == 0 ? 0 : -1;
+}
+		
+
 /**
  * Compare a pointer-length object with a NULL-terminated string
  * (case-sensitive)

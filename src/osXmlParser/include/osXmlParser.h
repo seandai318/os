@@ -8,6 +8,7 @@
 #include "osList.h"
 #include "osTypes.h"
 #include "osMBuf.h"
+#include "osPL.h"
 
 #include "osXmlParserData.h"
 
@@ -30,7 +31,9 @@ osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen_t* val
 bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem);
 osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue);
 bool osXml_isDigitType(osXmlDataType_e dataType);
+osPointerLen_t* osXsd_getXSAlias();
 bool osXml_isXSSimpleType(osXmlDataType_e dataType);
+osPointerLen_t* osXsd_getXSAlias();
 void osXsdElement_cleanup(void* data);
 
 

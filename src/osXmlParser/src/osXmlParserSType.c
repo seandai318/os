@@ -18,6 +18,7 @@
 #include "osXmlParser.h"
 #include "osXmlParserData.h"
 #include "osXmlParserSType.h"
+#include "osXmlParserLib.h"
 
 
 #define OS_XML_COMPLEXTYPE_LEN	14
@@ -48,51 +49,53 @@ static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, 
     }
 
 	osXmlRestrictionFacet_e facetType = OS_XML_RESTRICTION_FACET_UNKNOWN;
+	osPointerLen_t* pXsAlias = osXsd_getXSAlias();
+
     //add to the simpleTypeInfo data structure
-    switch(pTagInfo->tag.l)
+    switch(pTagInfo->tag.l - pXsAlias->l)
     {
-		case 8:		//len=8, "xs:union"
+		case 5:		//len=8, "xs:union"
 			//this function deals with simpleType facet except for this one and "xs:restriction".  Special handling.
-			if(strncmp("xs:union", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+			if(strncmp("union", &pTagInfo->tag.p[pXsAlias->l], 5) == 0)
             {
 				//we do not further parse the union member, just assign the base type to be xs:string
 				pSimpleInfo->baseType = OS_XML_DATA_TYPE_XS_STRING;
  			}
 			break;
-		case 9:		//len=9, "xs:length"
-			if(strncmp("xs:length", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+		case 6:		//len=9, "xs:length"
+			if(strncmp("length", &pTagInfo->tag.p[pXsAlias->l], 6) == 0)
 			{
 				facetType = OS_XML_RESTRICTION_FACET_LENGTH;
 			}
 			break;
-		case 10:	//len=10, "xs:pattern"
-			if(strncmp("xs:pattern", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+		case 7:	//len=10, "xs:pattern"
+			if(strncmp("pattern", &pTagInfo->tag.p[pXsAlias->l], 7) == 0)
 			{
                 facetType = OS_XML_RESTRICTION_FACET_PATTERN;
             }
             break;
-		case 12:	//len=12, "xs:minLength", "xs:maxLength"
-            if(pTagInfo->tag.p[4] == 'i' && strncmp("xs:minLength", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+		case 9:	//len=12, "xs:minLength", "xs:maxLength"
+            if(pTagInfo->tag.p[pXsAlias->l+1] == 'i' && strncmp("minLength", &pTagInfo->tag.p[pXsAlias->l], 9) == 0)
             {
                 facetType = OS_XML_RESTRICTION_FACET_MIN_LENGTH;
             }
-			else if(pTagInfo->tag.p[4] == 'a' &&strncmp("xs:maxLength", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+			else if(pTagInfo->tag.p[pXsAlias->l+1] == 'a' &&strncmp("maxLength", &pTagInfo->tag.p[pXsAlias->l], 9) == 0)
             {
                 facetType = OS_XML_RESTRICTION_FACET_MAX_LENGTH;
             }
             break;
-		case 13:	//len=13, "xs:whiteSpace"
-			if(strncmp("xs:whiteSpace", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+		case 10:	//len=13, "xs:whiteSpace"
+			if(strncmp("whiteSpace", &pTagInfo->tag.p[pXsAlias->l], 10) == 0)
             {
                 facetType = OS_XML_RESTRICTION_FACET_WHITE_SPACE;
             }
             break;
-        case 14:         //len=14, "xs:restriction", "xs:totalDigits", "xs:enumeration"
-			switch(pTagInfo->tag.p[3])
+        case 11:         //len=14, "xs:restriction", "xs:totalDigits", "xs:enumeration"
+			switch(pTagInfo->tag.p[pXsAlias->l])
 			{
 				case 'r':
 					//this function deals with simpleType facet except for this one and "xs:union".  Special handling.
-					if(strncmp("xs:restriction", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+					if(strncmp("restriction", &pTagInfo->tag.p[pXsAlias->l], 11) == 0)
             		{
 					    osListElement_t* pLE = pTagInfo->attrNVList.head;
     					while(pLE)
@@ -115,13 +118,13 @@ static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, 
             		}
 					break;
 				case 't':
-					if(strncmp("xs:totalDigits", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+					if(strncmp("totalDigits", &pTagInfo->tag.p[pXsAlias->l], 11) == 0)
 					{
 						facetType = OS_XML_RESTRICTION_FACET_TOTAL_DIGITS;
 					}
 					break;
 				case 'e':
-					if(strncmp("xs:enumeration", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+					if(strncmp("enumeration", &pTagInfo->tag.p[pXsAlias->l], 11) == 0)
                     {
 						facetType = OS_XML_RESTRICTION_FACET_ENUM;
 					}
@@ -130,25 +133,25 @@ static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, 
                     break;
 			}
             break;
-		case 15:	//len=15, "xs:minExclusive", "xs:minInclusive", "xs:maxExclusive", "xs:maxInclusive"
-			switch(pTagInfo->tag.p[4])
+		case 12:	//len=15, "xs:minExclusive", "xs:minInclusive", "xs:maxExclusive", "xs:maxInclusive"
+			switch(pTagInfo->tag.p[pXsAlias->l+1])
 			{
 				case 'i':
-					if(pTagInfo->tag.p[6] == 'E' && strncmp("xs:minExclusive", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+					if(pTagInfo->tag.p[pXsAlias->l+3] == 'E' && strncmp("minExclusive", &pTagInfo->tag.p[pXsAlias->l], 12) == 0)
 					{
 						facetType = OS_XML_RESTRICTION_FACET_MIN_EXCLUSIVE;
 					}
-					else if(pTagInfo->tag.p[6] == 'I' && strncmp("xs:minInclusive", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+					else if(pTagInfo->tag.p[pXsAlias->l+3] == 'I' && strncmp("minInclusive", &pTagInfo->tag.p[pXsAlias->l], 12) == 0)
 					{
 						facetType = OS_XML_RESTRICTION_FACET_MIN_INCLUSIVE;
 					}
 					break;
 				case 'a':
-                	if(pTagInfo->tag.p[6] == 'E' && strncmp("xs:maxExclusive", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+                	if(pTagInfo->tag.p[pXsAlias->l+3] == 'E' && strncmp("maxExclusive", &pTagInfo->tag.p[pXsAlias->l], 12) == 0)
                 	{
 						facetType = OS_XML_RESTRICTION_FACET_MAX_EXCLUSIVE;
 					}
-                	else if(pTagInfo->tag.p[6] == 'I' && strncmp("xs:maxInclusive", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+                	else if(pTagInfo->tag.p[pXsAlias->l+3] == 'I' && strncmp("maxInclusive", &pTagInfo->tag.p[pXsAlias->l], 12) == 0)
                 	{
 						facetType = OS_XML_RESTRICTION_FACET_MAX_INCLUSIVE;
                 	}
@@ -157,8 +160,8 @@ static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, 
                 	break;
             }
 			break;
-        case 17:         //len=17, "xs:fractionDigits"
-            if(strncmp("xs:fractionDigits", pTagInfo->tag.p, pTagInfo->tag.l) == 0)
+        case 14:         //len=17, "xs:fractionDigits"
+            if(strncmp("fractionDigits", &pTagInfo->tag.p[pXsAlias->l], 14) == 0)
             {
 				facetType = OS_XML_RESTRICTION_FACET_FRACTION_DIGITS;
             }
@@ -224,7 +227,7 @@ osXmlSimpleType_t* osXsdSimpleType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pSim
             if(!pLE)
             {
                 //"xs:simpleType" was not pushed into tagList, so it is possible the end tag is "xs:simpleType"
-                if(strncmp("xs:simpleType", pTagInfo->tag.p, pTagInfo->tag.l))
+                if(osXml_xsTagCmp("simpleType", 10, &pTagInfo->tag))
                 {
                     logError("expect the end tag for xs:simpleType, but %r is found.", &((osXmlTagInfo_t*)pLE->data)->tag);
                     status = OS_ERROR_INVALID_VALUE;

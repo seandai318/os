@@ -108,6 +108,12 @@ typedef struct {
 
 
 typedef struct {
+	osPointerLen_t ns;
+	osPointerLen_t nsAlias;
+} osXsd_nsAliasInfo_t;
+
+
+typedef struct {
 	bool isXmlAnyElem;	//determine if this is for xsd <xs:any> tag or a xml element
 	union {
 		osXsdAnyElementTag_t elemAnyTag;	//when isXmlElemAny = false
@@ -116,10 +122,19 @@ typedef struct {
 } osXmlAnyElemInfo_t;
 
 
+typedef struct {
+    osPointerLen_t targetNS;
+    osList_t nsAliasList;		//each entry contains osXsd_nsAliasInfo_t
+    osPointerLen_t defaultNS;
+	osPointerLen_t xsAlias;		//for now xsAlias can either be empty or a spec ific alias, can not be both
+} osXsd_schemaInfo_t;
+
+
 typedef struct osXsdElement {
 	bool isRootElement;
 	bool isElementAny;		//if this is <xsd:any>
 	osPointerLen_t elemName;
+	osXsd_schemaInfo_t* pSchema;
 	osPointerLen_t elemTypeName;
 	int minOccurs;			//>=0
 	int maxOccurs;			// -1 means unbounded
@@ -135,6 +150,20 @@ typedef struct osXsdElement {
 	};
 	osList_t* pSimpleTypeList;	//Since simpleType objects shall be kept permanently, this can be removed.  Currently this is not used.
 } osXsdElement_t;
+
+
+typedef struct osXsdNamespace {
+	bool isDefaultNS;			//a schema may assign a namespace as default, at the same time assigning it an alias
+	bool isEmptyTargetNS;		//for a schema with empty target namespace.  Be noted there may have multiple empty target namespace schemas.  since we expect the total NS are limited, we use flat approach, i.e., does not introduce another layer for empty namespace (emptyNS->a list of schema names with empty NS) 
+	union {
+		osPointerLen_t tNamespace;	//target NS, like "http://testUri" in targetNamespace="http://testUir".  When isEmptyTargetNS = false
+		osPointerLen_t schemaName;	//schema name, when isEmptyTargetNS = true
+	};
+	osPointerLen_t nsAlias;		//like "xs" in xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+	osList_t gElementList;		//a list of global element for the namespace, each entry contains osXsdElement_t
+	osList_t gComplexList;		//a list of global complexType for the namespace, each entry contains osXmlComplexType_t
+	osList_t gSimpleList;		//a list of global simpleType for the namespace, each entry contains osXmlSimpleType_t
+} osXsdNamespace_t;
 
 
 //help data structure for tag and namve-value pair list

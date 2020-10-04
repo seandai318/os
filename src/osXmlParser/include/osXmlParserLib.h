@@ -45,5 +45,9 @@ typedef struct osXsd_elemPointer {
 
 osXsdElement_t* osXsd_createAnyElem(osPointerLen_t* pTag, bool isRootAnyElem);
 bool isExistXsdAnyElem(osXsd_elemPointer_t* pXsdPointer);
+int osXml_tagCmp(osPointerLen_t* pNsAlias, char* str, int strLen, osPointerLen_t* pTag);
+int osXml_xsTagCmp(char* str, int strlen, osPointerLen_t* pTag);
+bool osXml_singleDelimitMatch(const char* str, int strlen, char delimit, osPointerLen_t* tag, osPointerLen_t* pFirstSection);
+
 
 #endif
