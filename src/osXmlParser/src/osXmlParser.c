@@ -29,7 +29,8 @@
 
 
 //static osXsdElement_t* osXsd_getRootElemInfo(osMBuf_t* pXmlBuf);
-static osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf);
+static osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf);
+static osXsdSchema_t* osXsd_parseSchema(osMBuf_t* pXmlBuf);
 static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCTypeList, osList_t* pSTypeList);
 static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, osList_t* pSTypeList, osXmlTagInfo_t** pGlobalElemTagInfo, bool* isEndSchemaTag);
 static void* osXsd_getTypeByname(osList_t* pTypeList, osPointerLen_t* pElemTypeName);
@@ -37,6 +38,9 @@ static osStatus_e osXml_parseFirstTag(osMBuf_t* pBuf);
 osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, osXsd_schemaInfo_t* pSchemaInfo, bool* isSchemaTagDone);
 //static osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, bool* isSchemaTagDone);
 static osStatus_e osXsd_browseNode(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo);
+static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS);
+static void osXsdSchema_cleanup(void* data);
+static void osXsdNS_cleanup(void* data);
 
 static osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo);
 static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallbackInfo_t* callbackInfo);
@@ -51,6 +55,7 @@ static void osXmlTagInfo_cleanup(void* data);
 
 //the current xs namespace alias, always point to the one stored in the current processing root element
 static __thread osPointerLen_t* pCurXSAlias;
+static __thread osList_t xsdNSList;
 
 
 static void tempPrint(osList_t* pList, int i)
@@ -64,22 +69,63 @@ static void tempPrint(osList_t* pList, int i)
     }
 }
 
-
-osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)	
+osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf)
 {
-	osStatus_e status = OS_STATUS_OK;	
-	osXsdElement_t* pRootElem = NULL;
-    osXmlTagInfo_t* pXsdGlobalElemTagInfo = NULL;
-	osList_t ctypeList = {};	//for xs:complexType
-	osList_t* pSTypeList = oszalloc(sizeof(osList_t), NULL);	//for xs:simpleType
-	
-	if(!pXmlBuf)
+	osStatus_e status = OS_STATUS_OK;
+	osXsdNamespace_t* pNS = NULL;
+	osXsdSchema_t* pSchema = NULL;
+    if(!pXmlBuf)
+    {
+        logError("null pointer, pXmlBuf.");
+        status = OS_ERROR_NULL_POINTER;
+        goto EXIT;
+    }
+
+	pSchema = osXsd_parseSchema(pXmlBuf);
+	if(!pSchema)
 	{
-		logError("null pointer, pXmlBuf.");
-		status = OS_ERROR_NULL_POINTER;
+		logError("fails to osXsd_parseSchema.");
+		status = OS_ERROR_INVALID_VALUE;
 		goto EXIT;
 	}
 
+	pNS = osXsd_getNS(&xsdNSList, &pSchema->schemaInfo.targetNS);
+	if(!pNS)
+	{
+        logError("fails to osXsd_getNS for a pSchema(%r).", &pSchema->schemaInfo.targetNS);
+        osfree(pSchema);
+        status = OS_ERROR_INVALID_VALUE;
+        goto EXIT;
+    }
+
+    pNS->pTargetNS = &pSchema->schemaInfo.targetNS;
+    if(pSchema->schemaInfo.targetNS.l == 0)
+    {
+        pNS->pTargetNS = NULL;
+    }
+    if(!osList_append(&pNS->schemaList, pSchema))
+	{
+		logError("fails to osList_append a pSchema(%r).", &pSchema->schemaInfo.targetNS);
+		osfree(pSchema);
+		status = OS_ERROR_INVALID_VALUE;
+        goto EXIT;
+    }
+
+EXIT:
+	if(status != OS_STATUS_OK)
+	{
+		pNS = osfree(pNS);
+	}
+
+	return pNS;
+}
+	
+
+osXsdSchema_t* osXsd_parseSchema(osMBuf_t* pXmlBuf)	
+{
+	osStatus_e status = OS_STATUS_OK;	
+	osXsdSchema_t* pSchema = NULL;
+	
 	//parse <?xml version="1.0" encoding="UTF-8"?>
 	if(osXml_parseFirstTag(pXmlBuf) != OS_STATUS_OK)
 	{
@@ -90,9 +136,9 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
 
 	bool isSchemaTagDone = false;
     bool isEndSchemaTag = false;
-	osXsd_schemaInfo_t* pSchemaInfo = oszalloc(sizeof(pSchemaInfo), NULL);
+	pSchema = oszalloc(sizeof(pSchema), osXsdSchema_cleanup);
 	//parse <xs:schema xxxx>
-	if(osXsd_parseSchemaTag(pXmlBuf, pSchemaInfo, &isSchemaTagDone) != OS_STATUS_OK)
+	if(osXsd_parseSchemaTag(pXmlBuf, &pSchema->schemaInfo, &isSchemaTagDone) != OS_STATUS_OK)
     {
         logError("fails to parse the xsd schema.");
 		status = OS_ERROR_INVALID_VALUE;
@@ -100,12 +146,13 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
     }
 
 	//for this XSD, xsAlias would not change.  In xml_parser, xsAlias will point to what is stored in the current rootElement (global element)
-	pCurXSAlias = &pSchemaInfo->xsAlias;
+	pCurXSAlias = &pSchema->schemaInfo.xsAlias;
 
+	osXsdElement_t* pRootElem = NULL;
 	while(pXmlBuf->pos < pXmlBuf->end)
 	{
 		osXmlTagInfo_t* pGlobalElemTagInfo = NULL;
-		status = osXsd_parseGlobalTag(pXmlBuf, &ctypeList, pSTypeList, &pGlobalElemTagInfo, &isEndSchemaTag);
+		status = osXsd_parseGlobalTag(pXmlBuf, &pSchema->gComplexList, &pSchema->gSimpleList, &pGlobalElemTagInfo, &isEndSchemaTag);
 
 		if(status != OS_STATUS_OK)
 		{
@@ -117,27 +164,17 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
 		//find a global element
 		if(pGlobalElemTagInfo)
 		{
-			//only allow one global element, root element
-			if(pXsdGlobalElemTagInfo)
-			{
-				logError("more than one global elements.");
-				osfree(pGlobalElemTagInfo);
-        		status = OS_ERROR_INVALID_VALUE;
-				goto EXIT;
-			}
-
-			pXsdGlobalElemTagInfo = pGlobalElemTagInfo;
-			if(pXsdGlobalElemTagInfo->isTagDone)
+			if(pGlobalElemTagInfo->isTagDone)
             {
                 //for <xs:element name="A" type="B" />
 				pRootElem = oszalloc(sizeof(osXsdElement_t), osXsdElement_cleanup);
 				pRootElem->isRootElement = true;
-                osXmlElement_getAttrInfo(&pXsdGlobalElemTagInfo->attrNVList, pRootElem);
+                osXmlElement_getAttrInfo(&pGlobalElemTagInfo->attrNVList, pRootElem);
             }
-            else if(!pXsdGlobalElemTagInfo->isEndTag)
+            else if(!pGlobalElemTagInfo->isEndTag)
             {
                 //for <xs:element name="A" type="B" ><xs:complexType name="C">...</xs:complexType></xs:element>
-                pRootElem = osXsd_parseElement(pXmlBuf, pXsdGlobalElemTagInfo);
+                pRootElem = osXsd_parseElement(pXmlBuf, pGlobalElemTagInfo);
                 if(!pRootElem)
                 {
                     logError("fails to osXsd_parseElement for root element, pos=%ld.", pXmlBuf->pos);
@@ -145,10 +182,13 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
                     goto EXIT;
                 }
                 pRootElem->isRootElement = true;
-				pRootElem->pSchema = pSchemaInfo;
-                pRootElem->pSimpleTypeList = pSTypeList;
+				pRootElem->pSchema = &pSchema->schemaInfo;
 			}
+
+			osList_append(&pSchema->gElementList, pRootElem);
 		}
+
+		pGlobalElemTagInfo = osfree(pGlobalElemTagInfo);
 		
 		if(isEndSchemaTag)
 		{
@@ -157,37 +197,25 @@ osXsdElement_t* osXsd_parse(osMBuf_t* pXmlBuf)
 		}
 	}
 
-	if(!pRootElem)
+	// link the root element with the child complex type.
+	osListElement_t* pLE = pSchema->gElementList.head;
+	while(pLE)
 	{
-		logError("fails to osXsd_parseGlobalTag, pRootElem=NULL.");
-		goto EXIT;
-	}
-
 //tempPrint(&ctypeList, 1);
-	/* link the root element with the child complex type.  Since the root element can only have one type=xxx, There can 
-     * only have one child complex type.  The child complex type may have multiple its own children though 
-     * */
-	status = osXsd_elemLinkChild(pRootElem, &ctypeList, pSTypeList);
+		pRootElem = pLE->data;
+		status = osXsd_elemLinkChild(pRootElem, &pSchema->gComplexList, &pSchema->gSimpleList);
 //tempPrint(&ctypeList, 2);
+		pLE = pLE->next;
+	}
 
 EXIT:
-	osfree(pXsdGlobalElemTagInfo);
-
-	if(status == OS_STATUS_OK)
-	{
-        //delete the cTypeList data structure, the cType data will be kept permanently as part of the xsd tree
-        osList_clear(&ctypeList);
-    }
-	else
+	if(status != OS_STATUS_OK)
 	{
 		logError("status != OS_STATUS_OK, delete pRootElem.");
-		osList_delete(&ctypeList);
-		osfree(pRootElem);
-		pRootElem = NULL;
-		osList_free(pSTypeList);
+		pSchema = osfree(pSchema);
 	}
 
-	return pRootElem;
+	return pSchema;
 }
 
 
@@ -699,14 +727,14 @@ bool osXml_isXsdValid(osMBuf_t* pXsdBuf)
 		return false;
 	}
 
-    osXsdElement_t* pXsdRoot = osXsd_parse(pXsdBuf);
-    if(!pXsdRoot)
+    osXsdNamespace_t* pNS = osXsd_parse(pXsdBuf);
+    if(!pNS)
     {
         logError("fails to osXsd_parse for xsdMBuf, pos=%ld.", pXsdBuf->pos);
         return false;
 	}
 
-    osfree(pXsdRoot);
+    osfree(pNS);
 	return true;
 }
 
@@ -719,20 +747,22 @@ bool osXml_isXmlValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osXmlDataCallbackInf
         return false;
     }
 
-    osXsdElement_t* pXsdRoot = osXsd_parse(pXsdBuf);
-    if(!pXsdRoot)
+    osXsdNamespace_t* pNS = osXsd_parse(pXsdBuf);
+    if(!pNS)
     {
         logError("fails to osXsd_parse for xsdMBuf, pos=%ld.", pXsdBuf->pos);
         return false;
     }
 
-    if(osXml_parse(pXmlBuf, pXsdRoot, callbackInfo) != OS_STATUS_OK)
+	//assume one schema
+	osXsdSchema_t* pSchema = pNS->schemaList.head->data;
+    if(osXml_parse(pXmlBuf, ((osXsdElement_t*)pSchema->gElementList.head->data), callbackInfo) != OS_STATUS_OK)
 	{
 		logError("fails to osXml_parse(), xmlBuf pos=%ld.", pXmlBuf->pos);
 		return false;
 	}
 
-	osfree(pXsdRoot);
+	osfree(pNS);
 	return true;
 }
 
@@ -784,8 +814,8 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
     }
 
 	logInfo("start xsd parse for %s.", xsdFileName);
-    pXsdRoot = osXsd_parse(xsdMBuf);
-    if(!pXsdRoot)
+    osXsdNamespace_t* pNS = osXsd_parse(xsdMBuf);
+    if(!pNS)
     {
         logError("fails to osXsd_parse for xsdMBuf.");
         status = OS_ERROR_INVALID_VALUE;
@@ -803,7 +833,9 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
     }
 
 	logInfo("start xml parse for %s.", xmlFileName);
-    status = osXml_parse(xmlBuf, pXsdRoot, callbackInfo);
+    osXsdSchema_t* pSchema = pNS->schemaList.head->data;
+    status = osXml_parse(xmlBuf, ((osXsdElement_t*)pSchema->gElementList.head->data), callbackInfo);
+//    status = osXml_parse(xmlBuf, pXsdRoot, callbackInfo);
 	if(status != OS_STATUS_OK)
 	{
 		logError("xml parse for %s failed.", xmlFileName);
@@ -2622,6 +2654,35 @@ EXIT:
 
 
 
+osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS)
+{
+	osXsdNamespace_t* pNS = NULL;
+
+	if(!pXsdNSList || !pTargetNS)
+	{
+		logError("NULL pointer, pXsdNSList=%p, pTargetNS=%p.", pXsdNSList, pTargetNS);
+		goto EXIT;
+	}
+
+	osListElement_t* pLE = pXsdNSList->head;
+	while(pLE)
+	{
+		if(osPL_cmp(pTargetNS, &((osXsdSchema_t*)pLE->data)->schemaInfo.targetNS) == 0)
+		{
+			pNS = pLE->data;
+			goto EXIT;
+		}
+
+		pLE = pLE->next;
+	}
+
+	pNS = oszalloc(sizeof(osXsdNamespace_t), osXsdNS_cleanup);
+	
+EXIT:
+	return pNS;
+}
+	
+
 static void osXmlTagInfo_cleanup(void* data)
 {
 	if(!data)
@@ -2661,4 +2722,30 @@ void osXsdElement_cleanup(void* data)
     {
 		osXmlComplexType_cleanup(pElement->pComplex);
     }
-} 
+}
+
+
+void osXsdSchema_cleanup(void* data)
+{
+	if(!data)
+	{
+		return;
+	}
+
+	osXsdSchema_t* pSchema = data;
+	osList_delete(&pSchema->gElementList);
+	osList_delete(&pSchema->gComplexList);
+	osList_delete(&pSchema->gSimpleList);
+	osList_delete(&pSchema->schemaInfo.nsAliasList);
+}
+
+
+void osXsdNS_cleanup(void* data)
+{
+    if(!data)
+    {
+        return;
+    }
+
+	osList_delete(&((osXsdNamespace_t*)data)->schemaList); 
+}

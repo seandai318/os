@@ -108,6 +108,7 @@ typedef struct {
 
 
 typedef struct {
+	short nsUseLabel;	//-1: used as default ns, 0: explicitly use alias only, 1: used as both default and alias ns (it is possible in a XSD, a namespace is assigned as default as well as alias)
 	osPointerLen_t ns;
 	osPointerLen_t nsAlias;
 } osXsd_nsAliasInfo_t;
@@ -148,22 +149,22 @@ typedef struct osXsdElement {
 		osXmlSimpleType_t* pSimple;
 		osXmlAnyElemInfo_t anyElem;		//if isElementAny = true
 	};
-	osList_t* pSimpleTypeList;	//Since simpleType objects shall be kept permanently, this can be removed.  Currently this is not used.
+//	osList_t* pSimpleTypeList;	//Since simpleType objects shall be kept permanently, this can be removed.  Currently this is not used.
 } osXsdElement_t;
 
 
+typedef struct {
+	osXsd_schemaInfo_t schemaInfo;
+    osList_t gElementList;      //a list of global element for a schema of a namespace, each entry contains osXsdElement_t
+    osList_t gComplexList;      //a list of global complexType for a schema of a namespace, each entry contains osXmlComplexType_t
+    osList_t gSimpleList;       //a list of global simpleType for a schema of a namespace, each entry contains osXmlSimpleType_t
+} osXsdSchema_t;
+
+
 typedef struct osXsdNamespace {
-	bool isDefaultNS;			//a schema may assign a namespace as default, at the same time assigning it an alias
-	bool isEmptyTargetNS;		//for a schema with empty target namespace.  Be noted there may have multiple empty target namespace schemas.  since we expect the total NS are limited, we use flat approach, i.e., does not introduce another layer for empty namespace (emptyNS->a list of schema names with empty NS) 
-	union {
-		osPointerLen_t tNamespace;	//target NS, like "http://testUri" in targetNamespace="http://testUir".  When isEmptyTargetNS = false
-		osPointerLen_t schemaName;	//schema name, when isEmptyTargetNS = true
-	};
-	osPointerLen_t nsAlias;		//like "xs" in xmlns:xs="http://www.w3.org/2001/XMLSchema" 
-	osList_t gElementList;		//a list of global element for the namespace, each entry contains osXsdElement_t
-	osList_t gComplexList;		//a list of global complexType for the namespace, each entry contains osXmlComplexType_t
-	osList_t gSimpleList;		//a list of global simpleType for the namespace, each entry contains osXmlSimpleType_t
-} osXsdNamespace_t;
+	osPointerLen_t* pTargetNS;	//if pTargetNS=NULL, a empty target namespace
+	osList_t schemaList;		//each entry contains a osXsd_schema_t since a namespace may have multiple schema/xsd
+} osXsdNamespace_t;	//based on target namespace
 
 
 //help data structure for tag and namve-value pair list
@@ -184,12 +185,6 @@ typedef struct osXmlNameValue {
     osPointerLen_t value;
 } osXmlNameValue_t;
 
-#if 0
-//callback function to provide xml element value to the application
-typedef osStatus_e (*osXmlDataCallback_h)(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlDataCallbackInfo_t* callbackInfo);
-
-typedef void (*osXsdElemCallback_h)(osXsdElement_t* pXsdElem, osXmlDataCallback_h callback, osXmlDataCallbackInfo_t* callbackInfo);
-#endif
 
 
 #endif
