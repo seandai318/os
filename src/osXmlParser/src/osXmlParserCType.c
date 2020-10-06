@@ -16,8 +16,11 @@
 #include "osMisc.h"
 
 #include "osXmlParser.h"
+#include "osXsdParser.h"
 #include "osXmlParserCType.h"
-#include "osXmlParserLib.h"
+#include "osXmlParserCommon.h"
+#include "osXmlMisc.h"
+
 
 
 static osStatus_e osXsdComplexType_getAttrInfo(osList_t* pAttrList, osXmlComplexType_t* pCtInfo);

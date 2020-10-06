@@ -16,9 +16,11 @@
 #include "osMisc.h"
 
 #include "osXmlParser.h"
+#include "osXsdParser.h"
 #include "osXmlParserData.h"
 #include "osXmlParserSType.h"
-#include "osXmlParserLib.h"
+#include "osXmlParserCommon.h"
+#include "osXmlMisc.h"
 
 
 #define OS_XML_COMPLEXTYPE_LEN	14
@@ -31,6 +33,8 @@
 static osStatus_e osXsdSimpleType_getSubTagInfo(osXmlSimpleType_t* pSimpleInfo, osXmlTagInfo_t* pTagInfo);
 static osStatus_e osXsdSimpleType_getAttrInfo(osList_t* pAttrList, osXmlSimpleType_t* pSInfo);
 static osXmlRestrictionFacet_t* osXsdSimpleType_getFacet(osXmlRestrictionFacet_e facetType, osXmlDataType_e baseType, osXmlTagInfo_t* pTagInfo);
+static bool osXml_isXSSimpleType(osXmlDataType_e dataType);
+static bool osXml_isDigitType(osXmlDataType_e dataType);
 static void osXmlSimpleType_cleanup(void* data);
 
 
@@ -639,4 +643,42 @@ static void osXmlSimpleType_cleanup(void* data)
 
 	osXmlSimpleType_t* pSimple = data;
 	osList_delete(&pSimple->facetList);
+}
+
+
+static bool osXml_isDigitType(osXmlDataType_e dataType)
+{
+    switch(dataType)
+    {
+        case OS_XML_DATA_TYPE_XS_BOOLEAN:
+        case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
+        case OS_XML_DATA_TYPE_XS_SHORT:
+        case OS_XML_DATA_TYPE_XS_INTEGER:
+        case OS_XML_DATA_TYPE_XS_LONG:
+            return true;
+            break;
+        default:
+            break;
+    }
+
+    return false;
+}
+
+
+static bool osXml_isXSSimpleType(osXmlDataType_e dataType)
+{
+    switch(dataType)
+    {
+        case OS_XML_DATA_TYPE_INVALID:
+        case OS_XML_DATA_TYPE_NO_XS:
+        case OS_XML_DATA_TYPE_SIMPLE:
+        case OS_XML_DATA_TYPE_COMPLEX:
+        case OS_XML_DATA_TYPE_ANY:
+            return false;
+            break;
+        default:
+            break;
+    }
+
+    return true;
 }		

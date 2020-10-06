@@ -13,28 +13,11 @@
 #include "osXmlParserData.h"
 
 
-#define OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM	50
 #define OSXML_IS_LWS(a) (!(a^0x20) || !(a^0x9) || !(a^0xa))
-#define OSXML_IS_XS_TYPE(a) (a != NULL && a->l >=3 && !(a->p[0]^'x') && !(a->p[1]^'s') && !(a->p[2]^':'))
-#define OSXML_IS_COMMENT_START(p) (*p=='<' && *(p+1)=='!' && *(p+2)=='-' && *(p+3)=='-')
-#define OSXML_IS_COMMENT_STOP(p) (*p=='>' && *(p-1)=='-' && *(p-2)=='-')
-
 #define OS_XML_MAX_FILE_NAME_SIZE	160		//the maximum xml and xsd file name length
 
 
-osStatus_e osXsd_elemCallback(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* callbackInfo);
-osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos);
-osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pTagInfo);
-osXsdElement_t* osXsd_parseElementAny(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagInfo);
-osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElement);
-osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlData_t* pXmlData);
-bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem);
-osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue);
-bool osXml_isDigitType(osXmlDataType_e dataType);
-osPointerLen_t* osXsd_getXSAlias();
-bool osXml_isXSSimpleType(osXmlDataType_e dataType);
-osPointerLen_t* osXsd_getXSAlias();
-void osXsdElement_cleanup(void* data);
+osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo);
 
 
 
