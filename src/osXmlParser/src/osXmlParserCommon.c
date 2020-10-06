@@ -467,34 +467,6 @@ osXsdElement_t* osXsd_createAnyElem(osPointerLen_t* pTag, bool isRootAnyElem)
 }
 
 
-bool isExistXsdAnyElem(osXsd_elemPointer_t* pXsdPointer)
-{
-	bool isExistAnyElem = false;
-
-    if(pXsdPointer->pCurElem->dataType != OS_XML_DATA_TYPE_COMPLEX)
-    {
-        mlogInfo(LM_XMLP, "the element(%r) is not complexType.", &pXsdPointer->pCurElem->elemName);
-        goto EXIT;
-    }
-
-    osXmlComplexType_t* pCT = pXsdPointer->pCurElem->pComplex;
-    osListElement_t* pLE = pCT->elemList.head;
-    while(pLE)
-    {
-		if(((osXsdElement_t*)pLE->data)->isElementAny)
-		{
-			isExistAnyElem = true;
-			break;
-		}
-
-        pLE = pLE->next;
-    }
-
-EXIT:
-    return isExistAnyElem;
-}
-
-
 bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem)
 {
     if(!pXsdElem)

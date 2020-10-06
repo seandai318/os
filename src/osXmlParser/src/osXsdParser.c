@@ -34,7 +34,6 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
 static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, osList_t* pSTypeList, osXmlTagInfo_t** pGlobalElemTagInfo, bool* isEndSchemaTag);
 static void* osXsd_getTypeByname(osList_t* pTypeList, osPointerLen_t* pElemTypeName);
 osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, osXsd_schemaInfo_t* pSchemaInfo, bool* isSchemaTagDone);
-//static osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, bool* isSchemaTagDone);
 static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS);
 static void osXsdSchema_cleanup(void* data);
 static void osXsdNS_cleanup(void* data);
@@ -42,7 +41,7 @@ static void osXsdNS_cleanup(void* data);
 static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagInfo_t* pTagInfo);
 
 
-//the current xs namespace alias, always point to the one stored in the current processing root element
+//the current xs namespace alias (it does not have to be "xs"), always point to the one stored in the current processing root element
 static __thread osPointerLen_t* pCurXSAlias;
 static __thread osList_t xsdNSList;
 

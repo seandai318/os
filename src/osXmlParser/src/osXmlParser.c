@@ -27,6 +27,7 @@
 
 
 
+static bool isExistXsdAnyElem(osXsd_elemPointer_t* pXsdPointer);
 static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, osXmlElemDispType_e* pParentXsdDispType, int* listIdx);
 static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer);
 
@@ -793,4 +794,32 @@ static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer)
 
 EXIT:
 	return pCT;
+}
+
+
+static bool isExistXsdAnyElem(osXsd_elemPointer_t* pXsdPointer)
+{
+    bool isExistAnyElem = false;
+
+    if(pXsdPointer->pCurElem->dataType != OS_XML_DATA_TYPE_COMPLEX)
+    {
+        mlogInfo(LM_XMLP, "the element(%r) is not complexType.", &pXsdPointer->pCurElem->elemName);
+        goto EXIT;
+    }
+
+    osXmlComplexType_t* pCT = pXsdPointer->pCurElem->pComplex;
+    osListElement_t* pLE = pCT->elemList.head;
+    while(pLE)
+    {
+        if(((osXsdElement_t*)pLE->data)->isElementAny)
+        {
+            isExistAnyElem = true;
+            break;
+        }
+
+        pLE = pLE->next;
+    }
+
+EXIT:
+    return isExistAnyElem;
 }
