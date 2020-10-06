@@ -27,6 +27,15 @@
 
 
 
+//this data structure used to help xml parsing against its xsd
+typedef struct osXsd_elemPointer {
+    osXsdElement_t* pCurElem;       //the current working xsd element
+    struct osXsd_elemPointer* pParentXsdPointer;    //the parent xsd pointer
+    int curIdx;                     //which idx in assignedChildIdx[] that the xsd element is current processing, used in for the ordering presence of sequence deposition
+    bool  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
+} osXsd_elemPointer_t;
+
+
 static bool isExistXsdAnyElem(osXsd_elemPointer_t* pXsdPointer);
 static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, osXmlElemDispType_e* pParentXsdDispType, int* listIdx);
 static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer);

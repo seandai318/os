@@ -36,6 +36,7 @@ typedef enum {
 } osXsdCheckTagInfoState_e;
 
 
+#if 0
 //this data structure used to help xml parsing against its xsd
 typedef struct osXsd_elemPointer {
     osXsdElement_t* pCurElem;       //the current working xsd element
@@ -43,7 +44,7 @@ typedef struct osXsd_elemPointer {
     int curIdx;                     //which idx in assignedChildIdx[] that the xsd element is current processing, used in for the ordering presence of sequence deposition
     bool  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
 } osXsd_elemPointer_t;
-
+#endif
 
 osStatus_e osXml_parseFirstTag(osMBuf_t* pXmlBuf);
 osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos);
