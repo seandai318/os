@@ -26,24 +26,21 @@
 #include "osXmlMisc.h"
 
 
-#define OS_XML_NS_XS_LEN	32
-
-
 static osXsdSchema_t* osXsd_parseSchema(osMBuf_t* pXmlBuf);
 static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCTypeList, osList_t* pSTypeList);
 static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, osList_t* pSTypeList, osXmlTagInfo_t** pGlobalElemTagInfo, bool* isEndSchemaTag);
 static void* osXsd_getTypeByname(osList_t* pTypeList, osPointerLen_t* pElemTypeName);
 osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, osXsd_schemaInfo_t* pSchemaInfo, bool* isSchemaTagDone);
-static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS);
+static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS, bool isCreateNS);
 static void osXsdSchema_cleanup(void* data);
 static void osXsdNS_cleanup(void* data);
-
+static osXsdElement_t* osXsd_getElementFromList(osList_t* pList, osPointerLen_t* pTag);
 static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagInfo_t* pTagInfo);
 
 
 //the current xs namespace alias (it does not have to be "xs"), always point to the one stored in the current processing root element
 static __thread osPointerLen_t* pCurXSAlias;
-static __thread osList_t xsdNSList;
+static __thread osList_t gXsdNSList;	//each entry contains a osXsdNamespace_t
 
 
 static void tempPrint(osList_t* pList, int i)
@@ -57,14 +54,14 @@ static void tempPrint(osList_t* pList, int i)
     }
 }
 
-osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf)
+osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf, osPointerLen_t* pXsdName)
 {
 	osStatus_e status = OS_STATUS_OK;
 	osXsdNamespace_t* pNS = NULL;
 	osXsdSchema_t* pSchema = NULL;
-    if(!pXmlBuf)
+    if(!pXmlBuf || !pXsdName)
     {
-        logError("null pointer, pXmlBuf.");
+        logError("null pointer, pXmlBuf=%p, pXsdName=%p.", pXmlBuf, pXsdName);
         status = OS_ERROR_NULL_POINTER;
         goto EXIT;
     }
@@ -77,7 +74,7 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf)
 		goto EXIT;
 	}
 
-	pNS = osXsd_getNS(&xsdNSList, &pSchema->schemaInfo.targetNS);
+	pNS = osXsd_getNS(&gXsdNSList, &pSchema->schemaInfo.targetNS, true);
 	if(!pNS)
 	{
         logError("fails to osXsd_getNS for a pSchema(%r).", &pSchema->schemaInfo.targetNS);
@@ -90,7 +87,11 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf)
     if(pSchema->schemaInfo.targetNS.l == 0)
     {
         pNS->pTargetNS = NULL;
+
+		//fill the schemaInfo.targetNS with the xsd name
+		pSchema->schemaInfo.targetNS = *pXsdName;
     }
+
     if(!osList_append(&pNS->schemaList, pSchema))
 	{
 		logError("fails to osList_append a pSchema(%r).", &pSchema->schemaInfo.targetNS);
@@ -98,6 +99,8 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf)
 		status = OS_ERROR_INVALID_VALUE;
         goto EXIT;
     }
+
+	osList_append(&gXsdNSList, pNS);
 
 EXIT:
 	if(status != OS_STATUS_OK)
@@ -174,6 +177,7 @@ osXsdSchema_t* osXsd_parseSchema(osMBuf_t* pXmlBuf)
 			}
 
 			osList_append(&pSchema->gElementList, pRootElem);
+			mdebug(LM_XMLP, "Global element(%r : %p) is added into schema(%p)'s gElementList.", &pGlobalElemTagInfo->tag,  pRootElem, pSchema);
 		}
 
 		pGlobalElemTagInfo = osfree(pGlobalElemTagInfo);
@@ -246,15 +250,15 @@ EXIT:
 }
 
 
-bool osXml_isXsdValid(osMBuf_t* pXsdBuf)
+bool osXsd_isValid(osMBuf_t* pXsdBuf, osPointerLen_t* xsdName)
 {
-    if(!pXsdBuf)
+    if(!pXsdBuf || !xsdName)
     {
-        logError("null pointer, pXsdBuf.");
+        logError("null pointer, pXsdBuf=%p, xsdName=%p.", pXsdBuf, xsdName);
         return false;
     }
 
-    osXsdNamespace_t* pNS = osXsd_parse(pXsdBuf);
+    osXsdNamespace_t* pNS = osXsd_parse(pXsdBuf, xsdName);
     if(!pNS)
     {
         logError("fails to osXsd_parse for xsdMBuf, pos=%ld.", pXsdBuf->pos);
@@ -274,7 +278,6 @@ bool osXml_isXsdValid(osMBuf_t* pXsdBuf)
  */
 static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCTypeList, osList_t* pSTypeList)
 {
-	DEBUG_BEGIN
 	osStatus_e status = OS_STATUS_OK;
 
 	if(!pParentElem || !pCTypeList)
@@ -296,6 +299,7 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
 	{
 		case OS_XML_DATA_TYPE_NO_XS:
 			pParentElem->pComplex = osXsd_getTypeByname(pCTypeList, &pParentElem->elemTypeName);
+logError("pParentElem->elemTypeName=%r, pParentElem->pComplex=%p", &pParentElem->elemTypeName, pParentElem->pComplex);
 			//first check if the element is a complex type
 			if(pParentElem->pComplex)
 			{
@@ -353,7 +357,6 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
 	}
 
 EXIT:
-	DEBUG_END
 	return status;
 }
 
@@ -415,11 +418,13 @@ static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pCTypeList, 
 	mdebug(LM_XMLP, "tag=%r", &pTagInfo->tag);
 
 	osPointerLen_t* pXsAlias = osXsd_getXSAlias();
-	switch(pTagInfo->tag.l - pXsAlias->l)
+	size_t realTagStart = pXsAlias->l ? (pXsAlias->l+1) : 0;
+	size_t realTagLen = pTagInfo->tag.l - realTagStart;
+	switch(realTagLen)
 	{
 		case 11:        //len = 11, "complexType"
         {
-			if(pTagInfo->tag.p[pXsAlias->l] != 'c' || osXml_tagCmp(pXsAlias, "complexType", 11, &pTagInfo->tag) != 0)
+			if(pTagInfo->tag.p[realTagStart] != 'c' || osXml_tagCmp(pXsAlias, "complexType", 11, &pTagInfo->tag) != 0)
 			{
 				mlogInfo(LM_XMLP, "top tag(%r) len=11, but is not complexType, ignore.", &pTagInfo->tag);
 				break;
@@ -444,7 +449,7 @@ static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pCTypeList, 
 		}
 		case 10:			//10, "simpleType"
 		{
-			if(pTagInfo->tag.p[pXsAlias->l] != 's' || osXml_tagCmp(pXsAlias, "simpleType", 10, &pTagInfo->tag) != 0)
+			if(pTagInfo->tag.p[realTagStart] != 's' || osXml_tagCmp(pXsAlias, "simpleType", 10, &pTagInfo->tag) != 0)
 			{
 				mlogInfo(LM_XMLP, "top tag(%r) len=10, but is not simpleType, ignore.", &pTagInfo->tag);
                 break;
@@ -548,7 +553,7 @@ osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, osXsd_schemaInfo_t* pSchemaIn
     *isSchemaTagDone = pTagInfo->isTagDone;
 
 	osPointerLen_t schemaXSAlias;
-	if(!osXml_singleDelimitMatch("schema", 6, ':', &pTagInfo->tag, &schemaXSAlias))
+	if(!osXml_singleDelimitMatch("schema", 6, ':', &pTagInfo->tag, true, &schemaXSAlias))
     {
         logError("expect schema tag, but instead, it is (%r).", &pTagInfo->tag);
 		status = OS_ERROR_INVALID_VALUE;
@@ -564,40 +569,20 @@ osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, osXsd_schemaInfo_t* pSchemaIn
 
 	bool isXSAliasFound = false;
 	osListElement_t* pLE = pTagInfo->attrNVList.head;
+	osXsd_nsAliasInfo_t* pnsAlias;
 	while(pLE)
 	{
-debug("to-remove, name=%r, value=%r, osPL_strplcmp=%d", &((osXmlNameValue_t*)pLE->data)->name, &((osXmlNameValue_t*)pLE->data)->value, osPL_strplcmp("xmlns", 5, &((osXmlNameValue_t*)pLE->data)->name, false));
-		if(osPL_strplcmp("xmlns", 5, &((osXmlNameValue_t*)pLE->data)->name, false) == 0)
+		status = osXml_getNSAlias((osXmlNameValue_t*)pLE->data, &pSchemaInfo->defaultNS, &pnsAlias, &isXSAliasFound, &pSchemaInfo->xsAlias);
+		if(status != OS_STATUS_OK)
 		{
-			if(((osXmlNameValue_t*)pLE->data)->name.p[5] != ':')
-			{
-				pSchemaInfo->defaultNS = ((osXmlNameValue_t*)pLE->data)->value;
+			logError("fails to osXml_getNSAlias().");
+			goto EXIT;
+		}
 
-				if(osPL_strplcmp("http://www.w3.org/2001/XMLSchema", OS_XML_NS_XS_LEN, &pSchemaInfo->defaultNS, true) == 0)
-    			{
-        			pSchemaInfo->xsAlias.l = 0;
-					isXSAliasFound = true;
-    			}
-			}
-			else
-			{
-debug("to-remove, ns=%r, osPL_strplcmp=%d", &((osXmlNameValue_t*)pLE->data)->value, osPL_strplcmp("http://www.w3.org/2001/XMLSchema", OS_XML_NS_XS_LEN, &((osXmlNameValue_t*)pLE->data)->value, true));
-				osXsd_nsAliasInfo_t* pnsAlias = osmalloc(sizeof(osXsd_nsAliasInfo_t), NULL);
-				pnsAlias->ns = ((osXmlNameValue_t*)pLE->data)->value;
-				pnsAlias->nsAlias.p = &((osXmlNameValue_t*)pLE->data)->name.p[6];	//the first char after "xmlns:"
-				pnsAlias->nsAlias.l = ((osXmlNameValue_t*)pLE->data)->name.l - 5; //5 here =strlen("xmlns:") - 1, we will add ':' after alias to make it "alias:", like "xs:"	 
-
-				//for no default namespace, change '=' to ':' in pXmlBuf for the alias to make later comparison easier.  It is OK since pXmlBuf would not be parsed any more
-				((char*)((osXmlNameValue_t*)pLE->data)->name.p)[((osXmlNameValue_t*)pLE->data)->name.l] = ':';	//change name=value to name:value in pXmlBuf
-
-                if(osPL_strplcmp("http://www.w3.org/2001/XMLSchema", OS_XML_NS_XS_LEN, &((osXmlNameValue_t*)pLE->data)->value, true) == 0)
-                {
-                    pSchemaInfo->xsAlias = pnsAlias->nsAlias;
-                    isXSAliasFound = true;
-                }
-
-				osList_append(&pSchemaInfo->nsAliasList, pnsAlias);
-			}
+		//find a nsalias
+		if(pnsAlias)
+		{
+			osList_append(&pSchemaInfo->nsAliasList, pnsAlias);
 		}
 		else if(osPL_strplcmp("targetNamespace", 15, &((osXmlNameValue_t*)pLE->data)->name, true) == 0)
 		{
@@ -616,7 +601,7 @@ debug("to-remove, ns=%r, osPL_strplcmp=%d", &((osXmlNameValue_t*)pLE->data)->val
 
 	if(osPL_cmp(&pSchemaInfo->xsAlias, &schemaXSAlias))
 	{
-		logError("schema namespace(%r) does not match with XS namespace(%r)", &pSchemaInfo->xsAlias, &schemaXSAlias); 
+		logError("schema(%r) namespace(%r) does not match with XS namespace(%r)", &pTagInfo->tag, &pSchemaInfo->xsAlias, &schemaXSAlias); 
         status = OS_ERROR_INVALID_VALUE;
         goto EXIT;
     }
@@ -1138,62 +1123,64 @@ osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
 
     osPointerLen_t* pXsAlias = osXsd_getXSAlias();
 
-	//for now, assume the only supported no XS data type is complex data type
+	//check if the typeValue starts with "xs"
 	if(strncmp(pXsAlias->p, typeValue->p, pXsAlias->l) != 0)
 	{
 		dataType = OS_XML_DATA_TYPE_NO_XS;
 		goto EXIT;
 	}
 
-	switch(typeValue->l - pXsAlias->l)
+    size_t realTagStart = pXsAlias->l ? (pXsAlias->l+1) : 0;
+    size_t realTagLen = typeValue->l - realTagStart;
+    switch(realTagLen)
 	{
         case 3:	//xs:int
-            if(strncmp("int", &typeValue->p[pXsAlias->l], 3) == 0)
+            if(strncmp("int", &typeValue->p[realTagStart], 3) == 0)
             {
                 dataType = OS_XML_DATA_TYPE_XS_INTEGER;
                 goto EXIT;
             }
             break;
         case 4:
-            if(strncmp("long", &typeValue->p[pXsAlias->l], 4) == 0)
+            if(strncmp("long", &typeValue->p[realTagStart], 4) == 0)
             {
                 dataType = OS_XML_DATA_TYPE_XS_LONG;
 				goto EXIT;
             }
             break;
 		case 5:
-            if(strncmp("short", &typeValue->p[pXsAlias->l], 5) == 0)
+            if(strncmp("short", &typeValue->p[realTagStart], 5) == 0)
             {
                 dataType = OS_XML_DATA_TYPE_XS_SHORT;
 				goto EXIT;
             }
 			break;
 		case 6:		//xs:string, xs:anyURI
-            if(typeValue->p[pXsAlias->l] == 's' && strncmp("string", &typeValue->p[pXsAlias->l], 6) == 0)
+            if(typeValue->p[realTagStart] == 's' && strncmp("string", &typeValue->p[realTagStart], 6) == 0)
             {
                 dataType = OS_XML_DATA_TYPE_XS_STRING;
 				goto EXIT;
             }
-            else if (typeValue->p[pXsAlias->l] == 'a' && strncmp("anyURI", &typeValue->p[pXsAlias->l], 6) == 0)
+            else if (typeValue->p[realTagStart] == 'a' && strncmp("anyURI", &typeValue->p[realTagStart], 6) == 0)
             {
                 dataType = OS_XML_DATA_TYPE_XS_STRING;
 				goto EXIT;
             }
 			break;
 		case 7:	//xs:integer, xs:boolean
-			if(typeValue->p[pXsAlias->l] == 'i' && strncmp("integer", &typeValue->p[pXsAlias->l], 7) == 0)
+			if(typeValue->p[realTagStart] == 'i' && strncmp("integer", &typeValue->p[realTagStart], 7) == 0)
 			{
 				dataType = OS_XML_DATA_TYPE_XS_INTEGER;
 				goto EXIT;
 			}
-			else if(typeValue->p[pXsAlias->l] == 'b' && strncmp("boolean", &typeValue->p[pXsAlias->l], 7) == 0)
+			else if(typeValue->p[realTagStart] == 'b' && strncmp("boolean", &typeValue->p[realTagStart], 7) == 0)
 			{
 				dataType = OS_XML_DATA_TYPE_XS_BOOLEAN;
 				goto EXIT;
 			}
 			break;
         case 8:    //xs:dateTime
-            if(typeValue->p[pXsAlias->l] == 'd' && strncmp("dateTime", &typeValue->p[pXsAlias->l], 8) == 0)
+            if(typeValue->p[realTagStart] == 'd' && strncmp("dateTime", &typeValue->p[realTagStart], 8) == 0)
             {
                 dataType = OS_XML_DATA_TYPE_XS_STRING;
 				goto EXIT;
@@ -1201,12 +1188,12 @@ osXmlDataType_e osXsd_getElemDataType(osPointerLen_t* typeValue)
             break;
 
 		case 12:	//xs:unsignedByte, xs:base64Binary
-			if(typeValue->p[pXsAlias->l] == 'u' && strncmp("unsignedByte", &typeValue->p[pXsAlias->l], 12) == 0)
+			if(typeValue->p[realTagStart] == 'u' && strncmp("unsignedByte", &typeValue->p[realTagStart], 12) == 0)
 			{
 				dataType = OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE;
 				goto EXIT;
 			}
-            else if(typeValue->p[pXsAlias->l] == 'b' && strncmp("xs:base64Binary", &typeValue->p[pXsAlias->l], 12) == 0)
+            else if(typeValue->p[realTagStart] == 'b' && strncmp("xs:base64Binary", &typeValue->p[realTagStart], 12) == 0)
             {
                 dataType = OS_XML_DATA_TYPE_XS_STRING;
                 goto EXIT;
@@ -1275,7 +1262,7 @@ EXIT:
 
 
 
-osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS)
+static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS, bool isCreateNS)
 {
 	osXsdNamespace_t* pNS = NULL;
 
@@ -1297,12 +1284,115 @@ osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS)
 		pLE = pLE->next;
 	}
 
-	pNS = oszalloc(sizeof(osXsdNamespace_t), osXsdNS_cleanup);
-	
+	if(isCreateNS)
+	{
+		pNS = oszalloc(sizeof(osXsdNamespace_t), osXsdNS_cleanup);
+	}
 EXIT:
 	return pNS;
 }
 	
+
+/* get a global element from a NS based on element tag.  The NS is identified from global gXsdNSList based on NS name
+ * 
+ * pTargetNS:       IN, the NS name or a xsd name
+ * isEmptyTargetNS: IN, if the NS a empty NS.  If empty NS, the pTargetNS contains a xsd name
+ * pElemTag:        IN, the tag name of the global element
+ */
+osXsdElement_t* osXsd_getNSRootElem(osPointerLen_t* pTargetNS, bool isEmptyTargetNS, osPointerLen_t* pElemTag)
+{
+	osXsdElement_t* pElem = NULL;
+	osXsdNamespace_t* pNS = NULL;
+
+	if(!pTargetNS || !pElemTag)
+	{
+		logError("null pointer, pTargetNS=%p, pElemTag=%p.", pTargetNS, pElemTag);
+		return NULL;
+	}
+
+	//find the right NS from gXsdNSList based on pTargetNS and isEmptyTargetNS
+	osListElement_t* pLE = gXsdNSList.head;
+	while(pLE)
+	{
+		if(isEmptyTargetNS)
+		{
+			if(!((osXsdNamespace_t*)pLE->data)->pTargetNS)
+			{
+				pNS = pLE->data;
+				break;
+			}
+		}
+		else
+		{
+			if(osPL_cmp(pTargetNS, ((osXsdNamespace_t*)pLE->data)->pTargetNS) == 0)
+			{
+				pNS = pLE->data;
+				break;
+			}
+		}
+
+		pLE = pLE->next;
+	}
+
+	if(pNS)
+	{
+		//from the NS, compare the element based on the pElemTag.  if the NS is a empty NS, find the right schema first
+		osListElement_t* pLE1 = pNS->schemaList.head;
+		while(pLE1)
+		{
+			//for xsd name, find the schema that matching the xsd name
+			if(isEmptyTargetNS)
+			{
+				if(osPL_cmp(&((osXsdSchema_t*)pLE1->data)->schemaInfo.targetNS, pTargetNS) == 0)
+				{
+					pElem = osXsd_getElementFromList(&((osXsdSchema_t*)pLE1->data)->gElementList, pElemTag);
+					break;
+				}
+			}
+			else
+			{
+				//for targetNS, going through the schema one after another (a ns may contains multiple schema)
+				pElem = osXsd_getElementFromList(&((osXsdSchema_t*)pLE1->data)->gElementList, pElemTag);
+				if(pElem)
+				{
+					break;
+				}
+			}
+
+			pLE1 = pLE1->next;
+		}
+	}
+
+EXIT:
+	mdebug(LM_XMLP, "root element for tag(%r) in pTargetNS(%r), isEmptyTargetNS(%d) is %s", pElemTag, pTargetNS, isEmptyTargetNS, pElem ? "found" : "not found");
+	return pElem;
+}
+
+
+static osXsdElement_t* osXsd_getElementFromList(osList_t* pList, osPointerLen_t* pTag)
+{
+    osXsdElement_t* pElem = NULL;
+    if(!pList || !pTag)
+    {
+        return NULL;
+    }
+
+    osListElement_t* pLE = pList->head;
+    while(pLE)
+    {
+        if(osPL_cmp(&((osXsdElement_t*)pLE->data)->elemName, pTag) == 0)
+        {
+            pElem = pLE->data;
+            break;
+        }
+
+        pLE = pLE->next;
+    }
+
+EXIT:
+    return pElem;
+}
+
 
 void osXsdElement_cleanup(void* data)
 {

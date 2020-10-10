@@ -113,15 +113,17 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
 		goto EXIT;
 	}
 
-	switch(pTagInfo->tag.l - pXsAlias->l)
+    size_t realTagStart = pXsAlias->l ? (pXsAlias->l+1) : 0;
+    size_t realTagLen = pTagInfo->tag.l - realTagStart;
+	switch(realTagLen)
 	{
 		case 3:			//len=4, "all", "any"
-			if(strncmp("all", &pTagInfo->tag.p[pXsAlias->l], 3) == 0)
+			if(strncmp("all", &pTagInfo->tag.p[realTagStart], 3) == 0)
 			{
 				pCtInfo->elemDispType = OS_XML_ELEMENT_DISP_TYPE_ALL;
 				isIgnored = false;
 			}
-			else if(strncmp("any", &pTagInfo->tag.p[pXsAlias->l], 3) == 0)
+			else if(strncmp("any", &pTagInfo->tag.p[realTagStart], 3) == 0)
 			{
                 osXsdElement_t* pElement;
 				//for case <xs:any> ... </xs:any>.  In that case, isPElement will be set
@@ -155,14 +157,14 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
             }
 			break;
 		case 6:			//len=6, "choice"
-			if(strncmp("choice", &pTagInfo->tag.p[pXsAlias->l], 6) == 0)
+			if(strncmp("choice", &pTagInfo->tag.p[realTagStart], 6) == 0)
 			{
 				pCtInfo->elemDispType = OS_XML_ELEMENT_DISP_TYPE_SEQUENCE;
 				isIgnored = false;
 			}
 			break;
 		case 7:		//len=7, "element"
-			if(strncmp("element", &pTagInfo->tag.p[pXsAlias->l], 7) == 0)
+			if(strncmp("element", &pTagInfo->tag.p[realTagStart], 7) == 0)
     		{
 				osXsdElement_t* pElement;
                 //for case <xs:element> ... </xs:element>.  In that case, isPElement will be set
@@ -183,7 +185,7 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
     		}
 			break;
 		case 8:		//len=8, "sequence"
-			if(strncmp("sequence", &pTagInfo->tag.p[pXsAlias->l], 8) == 0)
+			if(strncmp("sequence", &pTagInfo->tag.p[realTagStart], 8) == 0)
 			{
 				pCtInfo->elemDispType = OS_XML_ELEMENT_DISP_TYPE_SEQUENCE;
                 isIgnored = false;

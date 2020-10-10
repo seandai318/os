@@ -20,7 +20,7 @@ struct osMBuf;
 
 /** Defines a pointer-length string type */
 typedef struct osPointerLen {
-	const char *p;  	// pointer to string, const shall be dropped
+	const char *p;  	// pointer to string 
 	size_t l;       	// length of string
 } osPointerLen_t;
 

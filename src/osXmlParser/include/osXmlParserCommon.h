@@ -48,6 +48,7 @@ typedef struct osXsd_elemPointer {
 
 osStatus_e osXml_parseFirstTag(osMBuf_t* pXmlBuf);
 osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirstTag, osXmlTagInfo_t** ppTagInfo, size_t* tagStartPos);
+osStatus_e osXml_getNSAlias(osXmlNameValue_t* pAttrNameValue, osPointerLen_t* pDefaultNS, osXsd_nsAliasInfo_t** ppnsAlias, bool* isXSAliasFound, osPointerLen_t* pXsAlias);
 osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen_t* value, osXmlDataType_e dataType, osXmlData_t* pXmlData);
 osXsdElement_t* osXsd_createAnyElem(osPointerLen_t* pTag, bool isRootAnyElem);
 bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem);

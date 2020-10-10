@@ -151,20 +151,39 @@ int osXml_tagCmp(osPointerLen_t* pNsAlias, char* str, int strLen, osPointerLen_t
         return -1;
     }
 
-    if(pTag->l - pNsAlias->l != strLen)
-    {
-        return -1;
-    }
+	//need to consider the delimit ':'
+	if(pNsAlias->l)
+	{
+		if(pTag->l - pNsAlias->l -1 != strLen)
+		{
+        	return -1;
+		}
 
-    if(strncmp(pTag->p, pNsAlias->p, pNsAlias->l) != 0)
-    {
-        return -1;
-    }
+		if(strncmp(pTag->p, pNsAlias->p, pNsAlias->l) != 0)
+	    {
+    	    return -1;
+    	}
 
-    return strncmp(str, &pTag->p[pNsAlias->l], pTag->l - pNsAlias->l);
+		if(pTag->p[pNsAlias->l] != ':')
+		{
+			return -1;
+		}
+
+		return strncmp(str, &pTag->p[pNsAlias->l+1], pTag->l - pNsAlias->l-1);
+	}
+	else
+	{
+		if(pTag->l != strLen)
+		{
+			return -1;
+		}
+
+    	return strncmp(str, pTag->p, pTag->l);
+	}
 }
 
 
+//compare a ns alias preceeded tag with a specified tag name without ns alias, like osXml_xsTagCmp("element", 7, &pTagInfo->tag)
 int osXml_xsTagCmp(char* str, int strlen, osPointerLen_t* pTag)
 {
     osPointerLen_t* pXsAlias = osXsd_getXSAlias();
@@ -172,18 +191,27 @@ int osXml_xsTagCmp(char* str, int strlen, osPointerLen_t* pTag)
 }
 
 
-bool osXml_singleDelimitMatch(const char* str, int strlen, char delimit, osPointerLen_t* tag, osPointerLen_t* pFirstSection)
+/* match a known string before or after the delimit. The string is specified with str.
+ * return true either a delimit is found (the first delimit), or no delimit, but src and dest string match
+ * str:          IN, the string to be checked if exist in tag
+ * strlen:       IN, the string length
+ * delimit:      IN, the delimit char, like ':' in "xmlns:xs"
+ * tag:          IN, the string to be checked whether it ontains str
+ * isStrAfterDelimit: IN, true, the delimit preceeds str, false, the delimit after str
+ * pSection:     OUT, the other part of tag after excluding str and ':'
+ */
+bool osXml_singleDelimitMatch(const char* str, int strlen, char delimit, osPointerLen_t* tag, bool isStrAfterDelimit, osPointerLen_t* pSection)
 {
-    if(!str || !tag || !pFirstSection)
+    if(!str || !tag || !pSection)
     {
-        logError("null pointer, str=%p, tag=%p, pFirstSection=%p", str, tag, pFirstSection);
+        logError("null pointer, str=%p, tag=%p, pSection=%p", str, tag, pSection);
         return false;
     }
 
     //case when there is no delimit
     if(strlen == tag->l && memcmp(str, tag->p, strlen) == 0)
     {
-        pFirstSection->l = 0;
+        pSection->l = 0;
         return true;
     }
 
@@ -191,14 +219,50 @@ bool osXml_singleDelimitMatch(const char* str, int strlen, char delimit, osPoint
     {
         if(tag->p[i] == delimit)
         {
-            if(strlen +i +1 == tag->l && memcmp(str, &tag->p[i+1], strlen) == 0)
-            {
-                pFirstSection->p = tag->p;
-                pFirstSection->l = i+1;
-                return true;
-            }
+			if(isStrAfterDelimit)
+			{
+            	if(strlen +i +1 == tag->l && memcmp(str, &tag->p[i+1], strlen) == 0)
+            	{
+                	pSection->p = tag->p;
+                	pSection->l = i;
+                	return true;
+            	}
+			}
+			else
+			{
+				if(strlen == i && memcmp(str, tag->p, strlen) == 0)
+				{
+					pSection->p = &tag->p[strlen+1];
+					pSection->l = tag->l - strlen -1;
+					return true;
+				}
+			}
+			break;
         }
     }
 
     return false;
 }
+
+
+void osXml_singleDelimitParse(osPointerLen_t* src, char delimit, osPointerLen_t* pLeftStr, osPointerLen_t* pRightStr)
+{
+	//this is a internal function, save time to check null pointer
+	for(int i=0; i<src->l; i++)
+    {
+        if(src->p[i] == delimit)
+        {
+			pLeftStr->p = src->p;
+			pLeftStr->l = i;
+
+			pRightStr->p = &src->p[pLeftStr->l + 1];
+			pRightStr->l = src->l - pLeftStr->l - 1;
+			
+			return;
+		}
+	}
+
+	pLeftStr->l = 0;
+	*pRightStr = *src;
+}
+

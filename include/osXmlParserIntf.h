@@ -27,10 +27,11 @@ typedef enum {
 
 
 typedef struct {
-    int eDataName;          //different app use different enum, like sipConfig_xmlDataName_e, diaConfig_xmlDataName_e, etc.
+    int eDataName;          //an entry from dataName enum, different app use different enum, like sipConfig_xmlDataName_e, diaConfig_xmlDataName_e, etc.
     osPointerLen_t dataName;
     osXmlDataType_e dataType;	 //for simpleType, this is set to OS_XML_DATA_TYPE_SIMPLE by user, and when callback, set to the XS type (like int, etc.)by the xmlparser
-    union {
+	osPointerLen_t nsAlias;
+    union {	//controlled by dataType
         bool xmlIsTrue;
         uint64_t xmlInt;
         osPointerLen_t xmlStr;
@@ -38,13 +39,18 @@ typedef struct {
 } osXmlData_t;
 
 
-typedef void (*osXmlDataCallback_h)(osXmlData_t* pXmlData);
+//user can use pnsAliasInfo, together with osXmlData_t.nsAlias, to get a data's ns info
+//be noted if pXmlData is gotten from xsd due to osXmlDataCallbackInfo_t.isUseDefault = true, and xml instance
+//does not contain the element, the nsAlias is from xsd, may not match with xml's, in other word, the nsAlias
+//from xsd shall not be interpretted by pnsAliasInfo (which is gotten from xml instance).
+typedef void (*osXmlDataCallback_h)(osXmlData_t* pXmlData, void* pnsAliasInfo);
 
 
 //app provided info for osXmlDataCallback_h callback
 typedef struct {
 	bool isAllowNoLeaf;		//whether app only wants leaf node value or also wants xml module to notify the prsence of a no leaf node
 	bool isUseDefault;		//whether app wants to use the default value for elements that have xsd minOccurs=0 and not appear in xml file
+	bool isAllElement;		//shall xml report all elements.  if true, *xmlData is irrelevent
 	osXmlDataCallback_h xmlCallback;	//if !NULL, the xml module will call this function each time a matching xml element is found, otherwise, the values will be stored in xmlData
 	osXmlData_t* xmlData;
 	int maxXmlDataSize;
@@ -54,8 +60,9 @@ typedef struct {
 
 //get xml leaf node value based on the xsd and xml files
 osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFileName, osXmlDataCallbackInfo_t* callbackInfo);
-bool osXml_isXsdValid(osMBuf_t* pXsdBuf);
-bool osXml_isXmlValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osXmlDataCallbackInfo_t* callbackInfo);
+osPointerLen_t* osXml_getnsInfo(void* pnsAliasInfo);
+bool osXsd_isValid(osMBuf_t* pXsdBuf, osPointerLen_t* xsdName);
+bool osXml_isValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osPointerLen_t* xsdName, osXmlDataCallbackInfo_t* callbackInfo);
 
 
 #endif

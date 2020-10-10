@@ -19,7 +19,8 @@ bool osXml_findPattern(osMBuf_t* pXmlBuf, osPointerLen_t* pPattern, bool isAdvan
 bool osXml_findWhiteSpace(osMBuf_t* pBuf, bool isAdvancePos);
 int osXml_tagCmp(osPointerLen_t* pNsAlias, char* str, int strLen, osPointerLen_t* pTag);
 int osXml_xsTagCmp(char* str, int strlen, osPointerLen_t* pTag);
-bool osXml_singleDelimitMatch(const char* str, int strlen, char delimit, osPointerLen_t* tag, osPointerLen_t* pFirstSection);
+bool osXml_singleDelimitMatch(const char* str, int strlen, char delimit, osPointerLen_t* tag, bool isStrAfterDelimit, osPointerLen_t* pFirstSection);
+void osXml_singleDelimitParse(osPointerLen_t* src, char delimit, osPointerLen_t* pLeftStr, osPointerLen_t* pRightStr);
 
 
 #endif

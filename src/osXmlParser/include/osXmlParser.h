@@ -17,6 +17,13 @@
 #define OS_XML_MAX_FILE_NAME_SIZE	160		//the maximum xml and xsd file name length
 
 
+typedef struct {
+	bool isDefaultNSXsdName;	//if true, the defaultNS is assigned with xsd name
+    osList_t nsAliasList;       //each entry contains osXsd_nsAliasInfo_t
+    osPointerLen_t defaultNS;
+} osXml_nsInfo_t;
+
+
 osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo);
 
 

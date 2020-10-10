@@ -33,13 +33,23 @@ typedef struct osXsd_elemPointer {
     struct osXsd_elemPointer* pParentXsdPointer;    //the parent xsd pointer
     int curIdx;                     //which idx in assignedChildIdx[] that the xsd element is current processing, used in for the ordering presence of sequence deposition
     bool  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
+	osXml_nsInfo_t* pXmlnsInfo;	//would not use osXsd_schemaInfo_t.targetNS here
 } osXsd_elemPointer_t;
 
 
 static bool isExistXsdAnyElem(osXsd_elemPointer_t* pXsdPointer);
 static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, osXmlElemDispType_e* pParentXsdDispType, int* listIdx);
 static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer);
+static osStatus_e osXml_getNsInfo(osList_t* pAttrNVList, osXml_nsInfo_t** ppNsInfo);
+static bool osXml_isAliasExist(osPointerLen_t* pRootAlias, osList_t* pAliasList, osPointerLen_t** pRootNS);
+static void osXml_updateNsInfo(osXml_nsInfo_t* pNewNsInfo, osXml_nsInfo_t* pXsdPointerXmlnsInfo);
+static osListElement_t* osXml_isAliasMatch(osList_t* nsAliasList, osPointerLen_t* pnsAlias);
+static void osXmlNsInfo_cleanup(void* data);
 
+//store the xml ns list.  Clear it when the xml parse is done
+static __thread osList_t gNSList;
+//the current pXmlnsInfo for a xml under parse
+static __thread osXml_nsInfo_t* pCurXmlInfo;
 
 	
 /* parse a xml input based on xsd.  Expect the top element is also the xsd root element, i.e., the xml implements the whole xsd  
@@ -91,7 +101,7 @@ static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer);
  * isUseDefault: IN, when true, the default value from xsd will be used if a complex type's disposition=sequence/all, =false, default value from xsd will not be checked
  * callbackInfo: OUT, callback data, the xml leaf value will be set there
  */
-static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXmlDataCallbackInfo_t* callbackInfo)
+static osStatus_e osXml_parse(osMBuf_t* pBuf, osPointerLen_t* xsdName, osXmlDataCallbackInfo_t* callbackInfo)
 {
     osStatus_e status = OS_STATUS_OK;
     osXmlTagInfo_t* pElemInfo = NULL;
@@ -108,9 +118,9 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXm
 	 * when parsing </root>, "root is popped out of xsdElemPointerList, the xsdElemPointerList is empty, the parse is done
 	 */  
 
-    if(!pBuf || !pXsdRootElem)
+    if(!pBuf || !xsdName)
     {
-        logError("null pointer, pBuf=%p, pXsdRootElem=%p.", pBuf, pXsdRootElem);
+        logError("null pointer, pBuf=%p, xsdName=%p.", pBuf, xsdName);
         status = OS_ERROR_NULL_POINTER;
         goto EXIT;
     }
@@ -126,6 +136,7 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXm
 	osXsdElement_t* pPrevAnyElem = NULL;	//for anyElem handling
     osXsd_elemPointer_t* pXsdPointer = NULL;
     osXsd_elemPointer_t* pParentXsdPointer = NULL;
+	osXsdElement_t* pXsdRootElem = NULL;
 
     osPointerLen_t value;
     size_t tagStartPos;
@@ -257,6 +268,16 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXm
 				}
 						
 				pParentXsdPointer = ((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer;
+				if(pParentXsdPointer)
+				{
+		            //pCurXmlInfo is always updated after processing </element> (in case there is pParentXsdPointer change)
+        		    //pCurXmlInfo will also be updated when <element> is processed and nsAlias may change
+            		//note pCurXmlInfo is introduced to simplify the setting of nsalias in osXml_xmlCallback(0.  it is also the reason it is
+            		//reassigned at the end of processing </element>
+					pCurXmlInfo = pParentXsdPointer->pXmlnsInfo;
+
+					//if !pParentXsdPointer, meaning the end of schema, that will be processed a little bit later
+				}
 
 			}	//if(((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer != pParentXsdPointer)
 
@@ -331,6 +352,77 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXm
 
             if(!pParentXsdPointer)
             {
+				//to find the rootElem from the right xsd
+				osPointerLen_t rootAlias, rootElemName, *pRootNS;
+				osXml_singleDelimitParse(&pElemInfo->tag, ':', &rootAlias, &rootElemName);
+
+				//get the xmlns alias
+				status = osXml_getNsInfo(&pElemInfo->attrNVList, &pXsdPointer->pXmlnsInfo);
+				if(status != OS_STATUS_OK)
+				{
+					logError("fails to osXml_getNsInfo() for element(%r).", &pElemInfo->tag);
+					goto EXIT;
+				}
+
+				//sanity check the rootAlias and pXsdPointer->pXmlnsInfo
+				if(pXsdPointer->pXmlnsInfo)
+				{
+					//if rootAlias exists, needs to match one in the pXsdPointer->pXmlnsInfo->nsAliasList
+					if(rootAlias.l)
+					{
+						if(!osXml_isAliasExist(&rootAlias, &pXsdPointer->pXmlnsInfo->nsAliasList, &pRootNS))
+						{
+							logError("rootAlias(%r) is not defined.", &rootAlias);
+							status = OS_ERROR_INVALID_VALUE;
+							goto EXIT;
+						}
+					}
+					else
+					{
+						//the default NS does not exist, use the input xsd as the default one
+						if(!pXsdPointer->pXmlnsInfo->defaultNS.l)
+						{
+							pXsdPointer->pXmlnsInfo->defaultNS = *xsdName;  //take the input xsd as the default xsd
+							pXsdPointer->pXmlnsInfo->isDefaultNSXsdName = true;
+						}
+					}
+				}
+				else
+				{
+					if(rootAlias.l)
+					{
+						logError("rootAlias(%r) is not defined.", &rootAlias);
+						status = OS_ERROR_INVALID_VALUE;
+                        goto EXIT;
+                    }
+					else
+					{
+						//if there is no xmlns info, create a default one using the input xsdName				
+						pXsdPointer->pXmlnsInfo = oszalloc(sizeof(osXml_nsInfo_t), osXmlNsInfo_cleanup);
+						pXsdPointer->pXmlnsInfo->defaultNS = *xsdName;	//take the input xsd as the default xsd
+                        pXsdPointer->pXmlnsInfo->isDefaultNSXsdName = true;
+					}
+				}
+
+				if(!pRootNS)
+				{
+					pRootNS = &pXsdPointer->pXmlnsInfo->defaultNS;
+				}
+
+                //save the nsInfoList in the global list for the purpose of memory free when the parse is done	
+				osList_append(&gNSList, pXsdPointer->pXmlnsInfo);
+				pCurXmlInfo = pXsdPointer->pXmlnsInfo;
+
+				//now get the rootElem
+				pXsdPointer->pCurElem = osXsd_getNSRootElem(pRootNS, pXsdPointer->pXmlnsInfo->isDefaultNSXsdName, &pElemInfo->tag);
+				pXsdRootElem = pXsdPointer->pCurElem;
+				if(!pXsdPointer->pCurElem)
+				{
+					logError("fails to find rootElem for tag(%r).", &pElemInfo->tag);
+					status = OS_ERROR_INVALID_VALUE;
+                    goto EXIT;
+                }
+#if 0 
                 pXsdPointer->pCurElem = pXsdRootElem;
 				
                 if(osPL_cmp(&pElemInfo->tag, &pXsdPointer->pCurElem->elemName) != 0)
@@ -343,9 +435,13 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXm
 
 				//pCurXSAlias always points to the current root element's XS namespace
 				osXsd_setXSAlias(&pXsdRootElem->pSchema->xsAlias);
+#endif
             }
-            else
+            else //if(!pParentXsdPointer)
             {
+				//each child xsdPointer inherent from parent.
+				pXsdPointer->pXmlnsInfo = pXsdPointer->pParentXsdPointer->pXmlnsInfo;
+
 				osXmlElemDispType_e parentXsdDispType = OS_XML_ELEMENT_DISP_TYPE_ALL;
 
 				//if this function is inside any element processing state, directly allocate the any element object
@@ -361,6 +457,57 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXm
 						//this happens for the first element going into the anyElement processing
 						if(isExistXsdAnyElem(pParentXsdPointer))
 						{
+							//for the root <xs:any> element, needs to rebuild xmlns alias list
+#if 1
+                			osPointerLen_t rootAlias, rootElemName;
+                			osXml_singleDelimitParse(&pElemInfo->tag, ':', &rootAlias, &rootElemName);
+
+                			//get the xmlns alias
+							osXml_nsInfo_t* pnsInfo = NULL;
+                			status = osXml_getNsInfo(&pElemInfo->attrNVList, &pnsInfo);
+                			if(status != OS_STATUS_OK)
+                			{
+                    			logError("fails to osXml_getNsInfo() for element(%r).", &pElemInfo->tag);
+                    			goto EXIT;
+                			}
+
+							//combine the parent nsInfo with new one
+							if(pnsInfo)
+							{
+								osXml_updateNsInfo(pnsInfo, pXsdPointer->pXmlnsInfo);
+							}
+
+                			//sanity check the rootAlias and pXsdPointer->pXmlnsInfo.  2 cases: rootAlias(Exist, no exist), pXsdPointer->pXmlnsInfo always exists (in the root elem processing, if xmlns does not exists, xsd name will be used to create a pXsdPointer->pXmlnsInfo).
+                    		//if rootAlias exists, needs to match one in the pXsdPointer->pXmlnsInfo->nsAliasList
+                    		if(rootAlias.l)
+                    		{
+                        		if(!osXml_isAliasExist(&rootAlias, &pXsdPointer->pXmlnsInfo->nsAliasList, NULL))
+                        		{
+                            		logError("rootAlias(%r) is not defined.", &rootAlias);
+                            		status = OS_ERROR_INVALID_VALUE;
+                            		goto EXIT;
+                    			}
+							}
+                    		else
+                    		{
+                        		//the default NS does not exist in the new element.
+                        		if(!pXsdPointer->pXmlnsInfo->defaultNS.l)
+                        		{
+									logError("defaultNS does not exist in the new element(%r), neither does the element has alias.", &pElemInfo->tag);
+									status = OS_ERROR_INVALID_VALUE;
+	                                goto EXIT;
+                    			}
+                			}
+
+                			//save the nsInfoList in the global list for the purpose of memory free when the parse is done
+							if(pnsInfo)
+							{
+                				osList_append(&gNSList, pXsdPointer->pXmlnsInfo);
+								pCurXmlInfo = pXsdPointer->pXmlnsInfo;
+							}
+#endif
+
+							//no need to get rootElem as we do not check xml elem against a xsd for <xs:any>.  In the future, we may check if processContents="strict" or "lax"
 							pXsdPointer->pCurElem = osXsd_createAnyElem(&pElemInfo->tag, true);	//true here indicate it is the root anyElem, isRootAnyElem = true
 							isProcessAnyElem = true;
 						
@@ -368,7 +515,7 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osXsdElement_t* pXsdRootElem, osXm
 						}
 						else
 						{
-                    		logError("the xsd does not have matching tag(%r) does not match with xsd.", &pElemInfo->tag);
+                    		logError("the xsd does not have matching tag(%r), does not match with xsd.", &pElemInfo->tag);
                     		osfree(pXsdPointer);
                     		status = OS_ERROR_INVALID_VALUE;
                     		goto EXIT;
@@ -504,7 +651,7 @@ EXIT:
 
 
 
-bool osXml_isXmlValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osXmlDataCallbackInfo_t* callbackInfo)
+bool osXml_isValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osPointerLen_t* xsdName, osXmlDataCallbackInfo_t* callbackInfo)
 {
     if(!pXsdBuf || !pXmlBuf)
     {
@@ -512,7 +659,7 @@ bool osXml_isXmlValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osXmlDataCallbackInf
         return false;
     }
 
-    osXsdNamespace_t* pNS = osXsd_parse(pXsdBuf);
+    osXsdNamespace_t* pNS = osXsd_parse(pXsdBuf, xsdName);
     if(!pNS)
     {
         logError("fails to osXsd_parse for xsdMBuf, pos=%ld.", pXsdBuf->pos);
@@ -521,7 +668,7 @@ bool osXml_isXmlValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osXmlDataCallbackInf
 
 	//assume one schema
 	osXsdSchema_t* pSchema = pNS->schemaList.head->data;
-    if(osXml_parse(pXmlBuf, ((osXsdElement_t*)pSchema->gElementList.head->data), callbackInfo) != OS_STATUS_OK)
+    if(osXml_parse(pXmlBuf, xsdName, callbackInfo) != OS_STATUS_OK)
 	{
 		logError("fails to osXml_parse(), xmlBuf pos=%ld.", pXmlBuf->pos);
 		return false;
@@ -579,7 +726,8 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
     }
 
 	logInfo("start xsd parse for %s.", xsdFileName);
-    osXsdNamespace_t* pNS = osXsd_parse(xsdMBuf);
+	osPointerLen_t xsdName = {xsdFileName, strlen(xsdFileName)};
+    osXsdNamespace_t* pNS = osXsd_parse(xsdMBuf, &xsdName);
     if(!pNS)
     {
         logError("fails to osXsd_parse for xsdMBuf.");
@@ -599,7 +747,7 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
 
 	logInfo("start xml parse for %s.", xmlFileName);
     osXsdSchema_t* pSchema = pNS->schemaList.head->data;
-    status = osXml_parse(xmlBuf, ((osXsdElement_t*)pSchema->gElementList.head->data), callbackInfo);
+    status = osXml_parse(xmlBuf, &xsdName, callbackInfo);
 //    status = osXml_parse(xmlBuf, pXsdRoot, callbackInfo);
 	if(status != OS_STATUS_OK)
 	{
@@ -624,6 +772,12 @@ EXIT:
 
 /* this function can be called for leaf or no leaf, for no leaf, it is expected to be called in the xml element start, like <xs:xxx>
  * a xml element stop is like </xs:xxx>.  For called in xml start, the value shall be set to NULL
+ *
+ * if isUseDefault=true, then do not parse ns alias in this function, assume user will have ns alias as part of the element name in
+ * xmlData.dataName.  The reason is that when isUseDefault=true, the xml parse may go into xsd for the default value, the xsd may use
+ * different ns alias for the same ns in xml.  The isUseDefault=true is a poperity implementation, xml spec allows a element to use
+ * a default value in xsd only when in xml instance, <element /> is used.  So it shall not be a problem to restrict the ns alias use
+ * for isUseDefault=true.  Just need to be careful what xsd is used and to include ns alias in osXmlData_t.dataname for isUseDefault=true.
  */
 osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo)
 {
@@ -661,14 +815,55 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, os
 		}
 
 		isLeaf = false;
-#if 0
-		if(pElement->isElementAny)
-		{
-			pElement->dataType = OS_XML_DATA_TYPE_COMPLEX;
-		}
-#endif
     }
 
+	if(callbackInfo->xmlCallback && callbackInfo->isAllElement)
+	{
+		osXmlData_t xmlData;
+
+	    if(isLeaf && value)
+        {
+            if(pElement->isElementAny)
+            {
+                pElement->dataType = OS_XML_DATA_TYPE_XS_STRING;
+            }
+            else
+            {
+                switch(pElement->dataType)
+                {
+                    case OS_XML_DATA_TYPE_XS_BOOLEAN:
+                    case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
+                    case OS_XML_DATA_TYPE_XS_SHORT:
+                    case OS_XML_DATA_TYPE_XS_INTEGER:
+                    case OS_XML_DATA_TYPE_XS_LONG:
+                    case OS_XML_DATA_TYPE_XS_STRING:
+                        status = osXmlXSType_convertData(&pElement->elemName, value, pElement->dataType, &xmlData);
+                        break;
+                    case OS_XML_DATA_TYPE_SIMPLE:
+                        status = osXmlSimpleType_convertData(pElement->pSimple, value, &xmlData);
+                        break;
+                    default:
+                        logError("unexpected data type(%d) for element(%r).", pElement->dataType, &pElement->elemName);
+                        return OS_ERROR_INVALID_VALUE;
+                        break;
+                }
+            }
+		}
+
+		xmlData.dataType = pElement->dataType;
+		if(callbackInfo->isUseDefault)
+		{
+			xmlData.dataName = pElement->elemName;
+			xmlData.nsAlias.l = 0;
+		}
+		else
+		{
+        	osXml_singleDelimitParse(&pElement->elemName, ':', &xmlData.nsAlias, &xmlData.dataName);
+		}
+		callbackInfo->xmlCallback(&xmlData, (void*)pCurXmlInfo);
+
+		return status;
+	}
 
     for(int i=0; i<callbackInfo->maxXmlDataSize; i++)
     {
@@ -680,7 +875,20 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, os
         }
 
         //find the matching data name
-        if(osPL_cmp(&pElement->elemName, &callbackInfo->xmlData[i].dataName) == 0)
+		bool isNameMatch = false; 
+		osPointerLen_t nsAlias = {};
+		if(callbackInfo->isUseDefault)
+		{
+			isNameMatch = !osPL_cmp(&pElement->elemName, &callbackInfo->xmlData[i].dataName);
+		}
+		else
+		{
+			osPointerLen_t elemRealName;
+         	osXml_singleDelimitParse(&pElement->elemName, ':', &nsAlias, &elemRealName);
+			isNameMatch = !osPL_cmp(&elemRealName, &callbackInfo->xmlData[i].dataName);
+		}
+
+        if(isNameMatch)
         {
             osXmlDataType_e origElemDataType = pElement->dataType;
 
@@ -720,9 +928,11 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, os
             	}
 			}
 
+			callbackInfo->xmlData[i].nsAlias = nsAlias;
+
 			if(callbackInfo->xmlCallback)
 			{
-				callbackInfo->xmlCallback(&callbackInfo->xmlData[i]);
+				callbackInfo->xmlCallback(&callbackInfo->xmlData[i], (void*)pCurXmlInfo);
 				//assign back to the original user expected data type, since callbackInfo->xmlData[i] may be reused if the xml use the same data type multiple times
 				callbackInfo->xmlData[i].dataType = origElemDataType;
 			}
@@ -831,4 +1041,163 @@ static bool isExistXsdAnyElem(osXsd_elemPointer_t* pXsdPointer)
 
 EXIT:
     return isExistAnyElem;
+}
+
+
+static osStatus_e osXml_getNsInfo(osList_t* pAttrNVList, osXml_nsInfo_t** ppNsInfo)
+{
+	osStatus_e status = OS_STATUS_OK;
+	
+	if(!pAttrNVList || !ppNsInfo)
+	{
+		logError("null pointer, pAttrNVList=%p, ppNsInfo=%p.", pAttrNVList, ppNsInfo);
+		return OS_ERROR_NULL_POINTER;
+	}
+
+	*ppNsInfo = oszalloc(sizeof(osXml_nsInfo_t), osXmlNsInfo_cleanup);
+	bool isNsFound = false;
+	osListElement_t* pLE = pAttrNVList->head;
+	while(pLE)
+	{
+        osXsd_nsAliasInfo_t* pnsAlias = oszalloc(sizeof(osXsd_nsAliasInfo_t), NULL);
+		if(osXml_singleDelimitMatch("xmlns", 5, ':', &((osXmlNameValue_t*)pLE->data)->name, false, &pnsAlias->nsAlias))
+		{
+			isNsFound = true;
+
+			pnsAlias->ns = ((osXmlNameValue_t*)pLE->data)->value;
+			if(!pnsAlias->nsAlias.l)
+			{
+				if((*ppNsInfo)->defaultNS.l)
+				{
+					logError("more than one default namespaces. The existing one(%r), the new one(%r).", &(*ppNsInfo)->defaultNS, &((osXmlNameValue_t*)pLE->data)->value);
+					osfree(pnsAlias);
+					status = OS_ERROR_INVALID_VALUE;
+					goto EXIT;
+				}
+
+				pnsAlias->nsUseLabel = -1;
+				(*ppNsInfo)->defaultNS = pnsAlias->ns;
+			}
+
+			osList_append(&(*ppNsInfo)->nsAliasList, pnsAlias);
+		}
+
+		pLE = pLE->next;
+	}
+		
+	//it is possible a ns is default, at the same time is assigned a alias. pnsAlias->nsUseLabel=1 is for this case.  Here we do not check this case and do not combine 2 entries into 1, to save the check time.  i.e., pnsAlias->nsUseLabel will never be 1 when this function is used.	
+EXIT:
+	if(status != OS_STATUS_OK || !isNsFound)
+	{
+		*ppNsInfo = osfree(*ppNsInfo);	
+	}
+
+	return status;
+}
+
+
+/* pNewNsInfo: 			 IN,  the new xmlns info from the element been parsing
+ * pXsdPointerXmlnsInfo: INOUT, in, the existing parent xsdPointer nsInfo, out, combined/updated nsInfo for the element
+ * 
+ * The combined nsInfo will be a combination of the aprent nsInfo and the new gotten nsInfo.  If there is alias name overlap, 
+ * the new one will override the parent one.  
+ */ 
+static void osXml_updateNsInfo(osXml_nsInfo_t* pNewNsInfo, osXml_nsInfo_t* pXsdPointerXmlnsInfo)
+{
+	if(!pNewNsInfo)
+	{
+		return;
+	}
+
+	if(!pXsdPointerXmlnsInfo)
+	{
+		logError("null pointer, pXsdPointerXmlnsInfo.");
+		return;
+	}
+
+	osListElement_t* pLE = pNewNsInfo->nsAliasList.head;
+	while(pLE)
+	{
+		osListElement_t* pMatchLE = osXml_isAliasMatch(&pXsdPointerXmlnsInfo->nsAliasList, &((osXsd_nsAliasInfo_t*)pLE->data)->nsAlias);
+		if(pMatchLE)
+		{
+			osList_deleteElementAll(pMatchLE);
+		}
+
+		pLE = pLE->next;
+	}
+
+	if(pNewNsInfo->defaultNS.l)
+	{
+		pXsdPointerXmlnsInfo->isDefaultNSXsdName = false;
+		pXsdPointerXmlnsInfo->defaultNS = pNewNsInfo->defaultNS;
+	}
+
+	osList_combine(&pXsdPointerXmlnsInfo->nsAliasList, &pNewNsInfo->nsAliasList);
+}
+		
+
+static bool osXml_isAliasExist(osPointerLen_t* pRootAlias, osList_t* pAliasList, osPointerLen_t** pRootNS)
+{
+	if(!pRootAlias || !pAliasList)
+	{
+		logError("null pointer, pRootAlias=%p, pAliasList=%p.", pRootAlias, pAliasList);
+		return false;
+	}
+
+	osListElement_t* pLE = pAliasList->head;
+	while(pLE)
+	{
+		if(osPL_cmp(&((osXsd_nsAliasInfo_t*)pLE->data)->nsAlias, pRootAlias) == 0)
+		{
+			if(pRootNS)
+			{
+				*pRootNS = &((osXsd_nsAliasInfo_t*)pLE->data)->ns;
+			}
+			return true;
+		}
+	
+		pLE = pLE->next;
+	}
+
+	if(pRootNS)
+	{
+		*pRootNS = NULL;
+	}
+
+	return false;
+}
+
+
+static osListElement_t* osXml_isAliasMatch(osList_t* nsAliasList, osPointerLen_t* pnsAlias)
+{
+	if(!nsAliasList || !pnsAlias)
+	{
+		logError("null pointer, nsAliasList=%p, pnsAlias=%p.", nsAliasList, pnsAlias);
+		return NULL;
+	}
+
+	osListElement_t* pLE = nsAliasList->head;
+	while(pLE)
+	{
+		if(osPL_cmp(&((osXsd_nsAliasInfo_t*)pLE->data)->nsAlias, pnsAlias) == 0)	
+		{
+			return pLE;
+		}
+
+		pLE = pLE->next;
+	}
+
+	return NULL;
+}
+
+static void osXmlNsInfo_cleanup(void* data)
+{
+	if(!data)
+	{
+		return;
+	}
+
+	osXml_nsInfo_t* pnsInfo = data;
+	osList_delete(&pnsInfo->nsAliasList);
 }

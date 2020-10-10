@@ -18,6 +18,8 @@
 #define OSXML_IS_COMMENT_START(p) (*p=='<' && *(p+1)=='!' && *(p+2)=='-' && *(p+3)=='-')
 #define OSXML_IS_COMMENT_STOP(p) (*p=='>' && *(p-1)=='-' && *(p-2)=='-')
 
+#define OS_XML_NS_XS_LEN       32
+
 
 static void osXmlTagInfo_cleanup(void* data);
 
@@ -488,6 +490,64 @@ bool osXml_isXsdElemSimpleType(osXsdElement_t* pXsdElem)
     }
 
     return true;
+}
+
+
+//isXSAliasFound and pXsAlias shall not be NULL when called by XSD.  For xml instance parsing, these 2 parameters are not needed, can be NULL
+osStatus_e osXml_getNSAlias(osXmlNameValue_t* pAttrNameValue, osPointerLen_t* pDefaultNS, osXsd_nsAliasInfo_t** ppnsAlias, bool* isXSAliasFound, osPointerLen_t* pXsAlias)
+{
+	osStatus_e status = OS_STATUS_OK;
+	if(!pAttrNameValue || !pDefaultNS || !ppnsAlias)
+	{
+		logError("null pointer, pAttrNameValue=%p, pDefaultNS=%p, ppnsAlias=%p.", pAttrNameValue, pDefaultNS, ppnsAlias);
+		status = OS_ERROR_NULL_POINTER;
+		goto EXIT;
+	}
+
+	*ppnsAlias = NULL;
+
+	//if not related to xmlns, ignore
+    if(osPL_strplcmp("xmlns", 5, &pAttrNameValue->name, false))
+    {
+		goto EXIT;
+	}
+
+    if(pAttrNameValue->name.p[5] != ':')
+    {
+		if(pDefaultNS->l)
+		{
+			logError("dual definition of default NS, existing=%r, new=%r.", pDefaultNS, &pAttrNameValue->value);
+			status = OS_ERROR_INVALID_VALUE;
+			goto EXIT;
+		}
+			
+        *pDefaultNS = pAttrNameValue->value;
+
+        if(isXSAliasFound && pXsAlias && osPL_strplcmp("http://www.w3.org/2001/XMLSchema", OS_XML_NS_XS_LEN, pDefaultNS, true) == 0)
+        {
+			pXsAlias->l = 0;
+            *isXSAliasFound = true;
+        }
+	}
+    else
+    {
+    	*ppnsAlias = osmalloc(sizeof(osXsd_nsAliasInfo_t), NULL);
+        (*ppnsAlias)->ns = pAttrNameValue->value;
+        (*ppnsAlias)->nsAlias.p = &pAttrNameValue->name.p[6];   //the first char after "xmlns:"
+        (*ppnsAlias)->nsAlias.l = pAttrNameValue->name.l - 6; 	//6 here =strlen("xmlns:")
+#if 0
+        //for no default namespace, change '=' to ':' in pXmlBuf for the alias to make later comparison easier.  It is OK since pXmlBuf would not be parsed any more
+		((char*)pAttrNameValue->name.p)[pAttrNameValue->name.l] = ':';  //change name=value to name:value in pXmlBuf
+#endif
+        if(isXSAliasFound && pXsAlias &&osPL_strplcmp("http://www.w3.org/2001/XMLSchema", OS_XML_NS_XS_LEN, &pAttrNameValue->value, true) == 0)
+        {
+			*pXsAlias = (*ppnsAlias)->nsAlias;
+            *isXSAliasFound = true;
+        }
+	}
+
+EXIT:
+	return status;
 }
 
 

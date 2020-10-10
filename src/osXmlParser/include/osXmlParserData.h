@@ -124,7 +124,7 @@ typedef struct {
 
 
 typedef struct {
-    osPointerLen_t targetNS;
+    osPointerLen_t targetNS;	//target ns or a xsd name (for no target ns schema), when xsd nme is used, ns.pTargetNS = NULL
     osList_t nsAliasList;		//each entry contains osXsd_nsAliasInfo_t
     osPointerLen_t defaultNS;
 	osPointerLen_t xsAlias;		//for now xsAlias can either be empty or a spec ific alias, can not be both
@@ -154,6 +154,8 @@ typedef struct osXsdElement {
 
 
 typedef struct {
+//	bool isTargetNSUsingXsd;	//if true, the targetNS is a XSD name (not from XSD schema, instead, assigned by user)
+//	osPointerLen_t schemaName;	//xsd file name.  only relevant for a xsd that has null target namespace (user uses this to refer a xsd, otherwise, the target ns will be used to refer a namespace)
 	osXsd_schemaInfo_t schemaInfo;
     osList_t gElementList;      //a list of global element for a schema of a namespace, each entry contains osXsdElement_t
     osList_t gComplexList;      //a list of global complexType for a schema of a namespace, each entry contains osXmlComplexType_t
@@ -162,7 +164,7 @@ typedef struct {
 
 
 typedef struct osXsdNamespace {
-	osPointerLen_t* pTargetNS;	//if pTargetNS=NULL, a empty target namespace
+	osPointerLen_t* pTargetNS;	//if pTargetNS=NULL, a empty target namespace.  In that case, The targetNS inside shcemaInfo contains xsd name 
 	osList_t schemaList;		//each entry contains a osXsd_schema_t since a namespace may have multiple schema/xsd
 } osXsdNamespace_t;	//based on target namespace
 
