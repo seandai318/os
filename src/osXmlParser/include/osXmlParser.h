@@ -24,7 +24,7 @@ typedef struct {
 } osXml_nsInfo_t;
 
 
-osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo);
+osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo, void* pCurXmlInfo);
 
 
 
