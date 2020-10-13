@@ -459,7 +459,8 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
 	switch(pSimple->baseType)
 	{
 		case OS_XML_DATA_TYPE_XS_BOOLEAN:
-			status = osXmlXSType_convertData(&pXmlData->dataName, pValue, OS_XML_DATA_TYPE_XS_BOOLEAN, pXmlData);
+            //pXmlData->dataName may not be defined yet, so use NULL in the first parameter of osXmlXSType_convertData()
+			status = osXmlXSType_convertData(NULL, pValue, OS_XML_DATA_TYPE_XS_BOOLEAN, pXmlData);
 			break;
         case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
     	case OS_XML_DATA_TYPE_XS_SHORT:
@@ -555,7 +556,8 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
                 goto EXIT;
             }
 
-            mlogInfo(LM_XMLP, "xmlData.dataName=%r, value=%r", &pXmlData->dataName, pValue);
+            //do not print out xmlData.dataName, as this may not have been assigned
+            mlogInfo(LM_XMLP, "pXmlData->dataType=%d, value=%r", pXmlData->dataType, pValue);
 
 			break;
 		}	//case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE etc.
@@ -625,7 +627,8 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
                 goto EXIT;
             }
 
-            mlogInfo(LM_XMLP, "xmlData.dataName=%r, value=%r", &pXmlData->dataName, pValue);
+			//do not print out xmlData.dataName, as this may not have been assigned
+            mlogInfo(LM_XMLP, "pXmlData->dataType=%d, value=%r", pXmlData->dataType, pValue);
 
             break;
         }	//case OS_XML_DATA_TYPE_XS_STRING

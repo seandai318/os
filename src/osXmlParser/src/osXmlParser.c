@@ -1074,11 +1074,13 @@ static osStatus_e osXml_parseEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
 
 	osXsd_elemPointer_t* pParentXsdPointer = pStateInfo->pParentXsdPointer;
     osXsdElement_t* pCurXsdElem = ((osXsd_elemPointer_t*)pLE->data)->pCurElem;
+
+    mdebug(LM_XMLP, "case </%r>, old pParentXsdPointer=%p, old xsdElem=%r, new xsdElem=%r, new pParentXsdPointer=%p", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL, pCurXsdElem ? &pCurXsdElem->elemName : NULL, ((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer);
+
     //parentXsd changes, check the previous parentXsd's elemList to make sure all elements in the list are processed
     //it is possible pLE->data->pParentXsdPointer==NULL when the elem is a root element
     if(((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer != pParentXsdPointer)
     {
-    	mdebug(LM_XMLP, "case </%r>, old pParentXsdPointer=%p, old xsdElem=%r, new xsdElem=%r, new pParentXsdPointer=%p", &pElemInfo->tag, pParentXsdPointer, pParentXsdPointer ? (&pParentXsdPointer->pCurElem->elemName) : NULL, pCurXsdElem ? &pCurXsdElem->elemName : NULL, ((osXsd_elemPointer_t*)pLE->data)->pParentXsdPointer);
         //need to move one layer up.  before doing it, check whether there is any min=0, max=0 element, and whether there is mandatory element not in the xml
         osXmlComplexType_t* pParentCT = osXsdPointer_getCT(pParentXsdPointer);
         if(!pParentCT)
@@ -1587,6 +1589,7 @@ EXIT:
  */
 osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, osXmlDataCallbackInfo_t* callbackInfo, void* pCurXmlInfo)
 {
+	DEBUG_BEGIN
 	osStatus_e status = OS_STATUS_OK;
 	bool isLeaf = true;
 
@@ -1608,7 +1611,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, os
 	}
 	else
 	{
-		//in value==0 stage, a <xs:any> element has not determined if it is a leaf, but a xs type element already know from the previous parsed xsd
+		//in value==NULL stage, a <xs:any> element has not determined if it is a leaf, but a xs type element already know from the previous parsed xsd
         if(osXml_isXsdElemSimpleType(pElement))
         {
             logError("the element(%r) is a leaf, but there is no value.", &pElement->elemName);
@@ -1626,6 +1629,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, os
 	if(callbackInfo->xmlCallback && callbackInfo->isAllElement)
 	{
 		osXmlData_t xmlData;
+		xmlData.eDataName = OS_XML_INVALID_EDATA_NAME;
 
 	    if(isLeaf && value)
         {
@@ -1633,30 +1637,31 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, os
             {
                 pElement->dataType = OS_XML_DATA_TYPE_XS_STRING;
             }
-            else
+                
+			switch(pElement->dataType)
             {
-                switch(pElement->dataType)
-                {
-                    case OS_XML_DATA_TYPE_XS_BOOLEAN:
-                    case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
-                    case OS_XML_DATA_TYPE_XS_SHORT:
-                    case OS_XML_DATA_TYPE_XS_INTEGER:
-                    case OS_XML_DATA_TYPE_XS_LONG:
-                    case OS_XML_DATA_TYPE_XS_STRING:
-                        status = osXmlXSType_convertData(&pElement->elemName, value, pElement->dataType, &xmlData);
-                        break;
-                    case OS_XML_DATA_TYPE_SIMPLE:
-                        status = osXmlSimpleType_convertData(pElement->pSimple, value, &xmlData);
-                        break;
-                    default:
-                        logError("unexpected data type(%d) for element(%r).", pElement->dataType, &pElement->elemName);
-                        return OS_ERROR_INVALID_VALUE;
-                        break;
-                }
+                case OS_XML_DATA_TYPE_XS_BOOLEAN:
+                case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
+                case OS_XML_DATA_TYPE_XS_SHORT:
+                case OS_XML_DATA_TYPE_XS_INTEGER:
+                case OS_XML_DATA_TYPE_XS_LONG:
+                case OS_XML_DATA_TYPE_XS_STRING:
+                    status = osXmlXSType_convertData(&pElement->elemName, value, pElement->dataType, &xmlData);
+                    break;
+                case OS_XML_DATA_TYPE_SIMPLE:
+                    status = osXmlSimpleType_convertData(pElement->pSimple, value, &xmlData);
+                    break;
+                default:
+                    logError("unexpected data type(%d) for element(%r).", pElement->dataType, &pElement->elemName);
+                    return OS_ERROR_INVALID_VALUE;
+                    break;
             }
 		}
+		else
+		{
+			xmlData.dataType = pElement->dataType;
+		}
 
-		xmlData.dataType = pElement->dataType;
 		if(callbackInfo->isUseDefault)
 		{
 			xmlData.dataName = pElement->elemName;
@@ -1673,7 +1678,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, os
 
     for(int i=0; i<callbackInfo->maxXmlDataSize; i++)
     {
-        //that requires within xmlData, the dataName has to be sorted from shortest to longest
+        //that requires: within xmlData, the dataName has to be sorted from shortest to longest
         if(pElement->elemName.l < callbackInfo->xmlData[i].dataName.l)
         {
             mdebug(LM_XMLP, "the app does not need element(%r), value=%r, ignore.", &pElement->elemName, isLeaf? value : NULL);

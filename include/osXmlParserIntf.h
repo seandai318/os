@@ -10,6 +10,8 @@
 #include "osMBuf.h"
 
 
+#define OS_XML_INVALID_EDATA_NAME	0x7FFFFFFF
+
 typedef enum {
 	OS_XML_DATA_TYPE_INVALID,
 	OS_XML_DATA_TYPE_XS_BOOLEAN,
@@ -27,7 +29,7 @@ typedef enum {
 
 
 typedef struct {
-    int eDataName;          //an entry from dataName enum, different app use different enum, like sipConfig_xmlDataName_e, diaConfig_xmlDataName_e, etc.
+    int eDataName;          //an entry from dataName enum, different app use different enum, like sipConfig_xmlDataName_e, diaConfig_xmlDataName_e, etc. app shall not use OS_XML_INVALID_EDATA_NAME as a valid enum value
     osPointerLen_t dataName;
     osXmlDataType_e dataType;	 //for simpleType, this is set to OS_XML_DATA_TYPE_SIMPLE by user, and when callback, set to the XS type (like int, etc.)by the xmlparser
 	osPointerLen_t nsAlias;

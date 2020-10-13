@@ -396,9 +396,9 @@ osStatus_e osXmlXSType_convertData(osPointerLen_t* elemName, osPointerLen_t* val
 {
     osStatus_e status = OS_STATUS_OK;
 
-    if(!elemName || !value || !pXmlData)
+    if(!value || !pXmlData)
     {
-        logError("null pointer, elemName=%p, value=%p, pXmlData=%p", elemName, value, pXmlData);
+        logError("null pointer, value=%p, pXmlData=%p", value, pXmlData);
         return OS_ERROR_NULL_POINTER;;
     }
 

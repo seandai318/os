@@ -102,7 +102,24 @@ void callback(osXmlData_t* pXmlValue, void* nsInfo)
             debug("TEST_HSS_MAX_NO_SIMULTANEOUS_SESSIONS, nsalias=%r, dataType=%d, value=%r", &pXmlValue->nsAlias, pXmlValue->dataType, &pXmlValue->xmlStr);
             break;
 		default:
-			debug("eDataName=%d is not handled, nsalias=%r.", pXmlValue->eDataName, &pXmlValue->nsAlias);
+			debug("dataName=%r is not handled, dataType=%d, nsalias=%r.", &pXmlValue->dataName, pXmlValue->dataType, &pXmlValue->nsAlias);
+			switch(pXmlValue->dataType)
+			{
+				case OS_XML_DATA_TYPE_XS_BOOLEAN:
+					debug("	value = %s", pXmlValue->xmlIsTrue ? "true" :"false");
+					break;
+    			case OS_XML_DATA_TYPE_XS_UNSIGNED_BYTE:
+    			case OS_XML_DATA_TYPE_XS_SHORT:
+    			case OS_XML_DATA_TYPE_XS_INTEGER:
+    			case OS_XML_DATA_TYPE_XS_LONG:
+					debug("	value = %d", pXmlValue->xmlInt);
+					break;
+				case OS_XML_DATA_TYPE_XS_STRING:
+					debug("	value = %r", &pXmlValue->xmlStr);
+					break;
+				defult:
+					break;
+			}
 			break;
 	}
 }
@@ -131,7 +148,7 @@ int main(int argc, char* argv[])
 	osMBuf_t* xmlMBuf = osMBuf_readFile(argv[2], 6000);
 #endif
 
-	osXmlDataCallbackInfo_t cbInfo={true, false, false, callback, testConfig_xmlData, TEST_XML_MAX_DATA_NAME_NUM};
+	osXmlDataCallbackInfo_t cbInfo={true, false, true, callback, testConfig_xmlData, TEST_XML_MAX_DATA_NAME_NUM};
 	osXml_getLeafValue(".", argv[1], argv[2], &cbInfo);
 #if 0
 	bool isValid = osXml_isXmlValid(xmlMBuf, xsdMBuf, false, &cbInfo);	
