@@ -1,0 +1,51 @@
+PROJECT_DIR = /home/ama/project
+IDIR = $(PROJECT_DIR)/os/include
+#INC=$(foreach d, $(IDIR), -I$d)
+INC=$(IDIR:%=-I%)
+AR=ar
+
+#src = $(wildcard *.c)
+src = xmlCxSsa20200930.c 
+obj = $(src:.c=.o)
+dep = $(obj:.o=.d)  # one dependency file for each source
+
+OS_DIR = $(PROJECT_DIR)/os
+OS_OBJ_DIR = $(OS_DIR)/debug
+
+CFLAGS=$(INC) -g -DPREMEM 
+#CFLAGS=$(INC) -g
+
+DEBUG = true
+ifeq ($(DEBUG), true)
+	override CFLAGS += -DDEBUG -DPREMEM_DEBUG
+#    override CFLAGS += -DDEBUG
+endif
+
+LDFLAGS = -L$(OS_OBJ_DIR) -los -lpthread -lrt
+
+xmlcxssa: $(obj) libos.a
+	$(CC) -o $@ $(CFLAGS) $(filter %.o, $^) $(LDFLAGS)
+#	$(AR) -cr $@ $^
+
+-include $(dep)   # include all dep files in the makefile
+
+# rule to generate a dep file by using the C preprocessor
+# (see man cpp for details on the -MM and -MT options)
+%.d: %.c
+	@mkdir -p $(dir $@)
+	$(CPP) $(CFLAGS) $< -MM -MT $(@:.d=.o) >$@
+
+
+.PHONY:	libos.a
+libos.a:
+	cd $(OS_DIR); $(MAKE)
+
+.PHONY: clean
+clean:
+	cd $(OS_DIR); $(MAKE) clean
+	rm -f $(obj) 
+	rm -f $(dep)
+
+.PHONY: cleandep
+cleandep:
+	rm -f $(dep)

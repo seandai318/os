@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Sh-Data>
+	<PublicIdentifiers>
+		<IMSPublicIdentity>sip:+12548718041@ims.mnc970.mcc310.3gppnetwork.org</IMSPublicIdentity>
+		<IMSPublicIdentity>tel:+12548718041</IMSPublicIdentity>
+		<Extension>
+			<IdentityType>0</IdentityType>
+		</Extension>
+	</PublicIdentifiers>
+</Sh-Data>

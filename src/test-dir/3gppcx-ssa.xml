@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<IMSSubscription xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="CxDataType3GPP.xsd" xmlns:HSS="http://www.ericsson.com/ProprietaryXMLschemas/whatevervalid" xsi:schemaLocation="http://www.ericsson.com/ProprietaryXMLschemas/whatevervalid CxDataTypeExtensions.xsd ">
+	<PrivateID>310970200000001@ims.mnc970.mcc310.3gppnetwork.org</PrivateID>
+	<ServiceProfile>
+		<PublicIdentity>
+			<Identity>tel:+12548718041</Identity>
+		</PublicIdentity>
+		<PublicIdentity>
+			<Identity>sip:+12548718041@ims.mnc970.mcc310.3gppnetwork.org</Identity>
+		</PublicIdentity>
+		<PublicIdentity>
+			<BarringIndication>1</BarringIndication>
+			<Identity>sip:310970200000001@ims.mnc970.mcc310.3gppnetwork.org</Identity>
+		</PublicIdentity>
+		<Extension>
+			<SharedIFCSetID>1</SharedIFCSetID>
+			<SharedIFCSetID>2</SharedIFCSetID>
+			<SharedIFCSetID>3</SharedIFCSetID>
+			<SharedIFCSetID>6</SharedIFCSetID>
+		</Extension>
+		<HSS:EricssonServiceProfileExtension>
+			<HSS:MaxNoSimultaneousSessions>5</HSS:MaxNoSimultaneousSessions>
+		</HSS:EricssonServiceProfileExtension>
+	</ServiceProfile>
+	<HSS:EricssonIMSSubscriptionExtension>
+		<HSS:SubscriptionId>
+			<HSS:SubscriptionIdType>10</HSS:SubscriptionIdType>
+			<HSS:SubscriptionIdData>12548718041</HSS:SubscriptionIdData>
+		</HSS:SubscriptionId>
+	</HSS:EricssonIMSSubscriptionExtension>
+</IMSSubscription>
