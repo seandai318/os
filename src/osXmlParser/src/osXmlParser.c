@@ -132,7 +132,7 @@ static osStatus_e osXml_parseAnyElemEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInf
  * isUseDefault: IN, when true, the default value from xsd will be used if a complex type's disposition=sequence/all, =false, default value from xsd will not be checked
  * callbackInfo: OUT, callback data, the xml leaf value will be set there
  */
-#if 0
+#if 0 
 static osList_t gNSList;               //store the xml ns list.  Clear it when the xml parse is done
 static osXml_nsInfo_t* pCurXmlInfo;    //the current pXmlnsInfo for a xml under parse
 
@@ -826,7 +826,7 @@ static osStatus_e osXml_parseRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo,
     mdebug(LM_XMLP, "case <%r>, pParentXsdPointer=NULL", &pElemInfo->tag);
 
     //to find the rootElem from the right xsd
-    osPointerLen_t rootAlias, rootElemName, *pRootNS;
+    osPointerLen_t rootAlias, rootElemName, *pRootNS = NULL;
     osXml_singleDelimitParse(&pElemInfo->tag, ':', &rootAlias, &rootElemName);
 
     //get the xmlns alias based the parsed element tag (pElemInfo)
@@ -946,9 +946,9 @@ static osStatus_e osXml_parseSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
 		if(status != OS_STATUS_OK)
 		{
 			logError("fails to osXml_parseAnyRootElem for tag(%r).", &pElemInfo->tag);
-            status = OS_ERROR_INVALID_VALUE;
-            goto EXIT;
-        }
+		}
+            
+		goto EXIT;
 	}
 
     osXsd_elemPointer_t* pXsdPointer = oszalloc(sizeof(osXsd_elemPointer_t), NULL);
@@ -1324,7 +1324,7 @@ static osStatus_e osXml_parseAnyRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemIn
     pStateInfo->tagPosInfo.openTagEndPos = pBuf->pos;
 
     //only perform NULL value osXml_xmlCallback() when the element is not a leaf or is <xs:any> element, be note at that time we do not know if a <xs:any> element is a leaf
-    if(pStateInfo->callbackInfo->isAllowNoLeaf )
+    if(pStateInfo->callbackInfo->isAllowNoLeaf)
     {
         //The data sanity check is performed by callback()
         status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
@@ -1943,7 +1943,7 @@ static void osXml_updateNsInfo(osXml_nsInfo_t* pNewNsInfo, osXml_nsInfo_t* pXsdP
 }
 		
 
-static bool osXml_isAliasExist(osPointerLen_t* pRootAlias, osList_t* pAliasList, osPointerLen_t** pRootNS)
+static bool osXml_isAliasExist(osPointerLen_t* pRootAlias, osList_t* pAliasList, osPointerLen_t** ppRootNS)
 {
 	if(!pRootAlias || !pAliasList)
 	{
@@ -1956,9 +1956,9 @@ static bool osXml_isAliasExist(osPointerLen_t* pRootAlias, osList_t* pAliasList,
 	{
 		if(osPL_cmp(&((osXsd_nsAliasInfo_t*)pLE->data)->nsAlias, pRootAlias) == 0)
 		{
-			if(pRootNS)
+			if(ppRootNS)
 			{
-				*pRootNS = &((osXsd_nsAliasInfo_t*)pLE->data)->ns;
+				*ppRootNS = &((osXsd_nsAliasInfo_t*)pLE->data)->ns;
 			}
 			return true;
 		}
@@ -1966,9 +1966,9 @@ static bool osXml_isAliasExist(osPointerLen_t* pRootAlias, osList_t* pAliasList,
 		pLE = pLE->next;
 	}
 
-	if(pRootNS)
+	if(ppRootNS)
 	{
-		*pRootNS = NULL;
+		*ppRootNS = NULL;
 	}
 
 	return false;

@@ -287,10 +287,10 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
 		goto EXIT;
 	}
 
+	mdebug(LM_XMLP, "pParentElem->elemTypeName=%r, isElementAny=%d, dataType=%d", &pParentElem->elemTypeName, pParentElem->isElementAny, pParentElem->dataType);
 	//check if it is a xs:any element
 	if(pParentElem->isElementAny)
 	{
-        mdebug(LM_XMLP, "a xs:any element. no further process is needed, ignore.");
 		goto EXIT;
 	}
 
@@ -299,7 +299,6 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
 	{
 		case OS_XML_DATA_TYPE_NO_XS:
 			pParentElem->pComplex = osXsd_getTypeByname(pCTypeList, &pParentElem->elemTypeName);
-logError("pParentElem->elemTypeName=%r, pParentElem->pComplex=%p", &pParentElem->elemTypeName, pParentElem->pComplex);
 			//first check if the element is a complex type
 			if(pParentElem->pComplex)
 			{
