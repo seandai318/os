@@ -7,6 +7,7 @@
 
 #include "osTypes.h"
 #include "osPL.h"
+#include "osList.h"
 #include "osMBuf.h"
 
 
