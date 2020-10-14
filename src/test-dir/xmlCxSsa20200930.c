@@ -102,7 +102,8 @@ void callback(osXmlData_t* pXmlValue, void* nsInfo)
             debug("TEST_HSS_MAX_NO_SIMULTANEOUS_SESSIONS, nsalias=%r, dataType=%d, value=%r", &pXmlValue->nsAlias, pXmlValue->dataType, &pXmlValue->xmlStr);
             break;
 		default:
-			debug("dataName=%r is not handled, dataType=%d, nsalias=%r.", &pXmlValue->dataName, pXmlValue->dataType, &pXmlValue->nsAlias);
+
+			debug("dataName=%r is not handled, dataType=%d, nsalias=%r, pNoXmlnsAttrList=%p.", &pXmlValue->dataName, pXmlValue->dataType, &pXmlValue->nsAlias, pXmlValue->pNoXmlnsAttrList);
 			switch(pXmlValue->dataType)
 			{
 				case OS_XML_DATA_TYPE_XS_BOOLEAN:
@@ -117,7 +118,16 @@ void callback(osXmlData_t* pXmlValue, void* nsInfo)
 				case OS_XML_DATA_TYPE_XS_STRING:
 					debug("	value = %r", &pXmlValue->xmlStr);
 					break;
-				defult:
+				default:
+					if(pXmlValue->pNoXmlnsAttrList)
+					{
+						osListElement_t* pLE = pXmlValue->pNoXmlnsAttrList->head;
+						while(pLE)
+						{
+							debug("	attribute name=%r, value=%r", &((osXmlNameValue_t*)pLE->data)->name, &((osXmlNameValue_t*)pLE->data)->value);
+							pLE = pLE->next;
+						}
+					}
 					break;
 			}
 			break;

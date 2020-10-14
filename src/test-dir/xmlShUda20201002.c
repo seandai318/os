@@ -61,7 +61,7 @@ void callback(osXmlData_t* pXmlValue, void* nsInfo)
                 case OS_XML_DATA_TYPE_XS_STRING:
                     debug("	value = %r", &pXmlValue->xmlStr);
                     break;
-                defult:
+                default:
                     break;
             }
             break;

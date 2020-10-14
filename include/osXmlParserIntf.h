@@ -33,6 +33,7 @@ typedef struct {
     osPointerLen_t dataName;
     osXmlDataType_e dataType;	 //for simpleType, this is set to OS_XML_DATA_TYPE_SIMPLE by user, and when callback, set to the XS type (like int, etc.)by the xmlparser
 	osPointerLen_t nsAlias;
+	const osList_t* pNoXmlnsAttrList;	//no xmlns attributes
     union {	//controlled by dataType
         bool xmlIsTrue;
         uint64_t xmlInt;
@@ -58,6 +59,11 @@ typedef struct {
 	int maxXmlDataSize;
 } osXmlDataCallbackInfo_t;
 
+
+typedef struct osXmlNameValue {
+    osPointerLen_t name;
+    osPointerLen_t value;
+} osXmlNameValue_t;
 
 
 //get xml leaf node value based on the xsd and xml files

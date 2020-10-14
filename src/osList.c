@@ -718,20 +718,20 @@ void osList_orderAppend(osList_t *list, osListSortHandler sortHandler, void* dat
 //combine list1 and list2, after the combination, list1 is the head.  pList2 is not freed, up for user to free it if necessary
 osList_t* osList_combine(osList_t* pList1, osList_t* pList2)
 {
-	if(pList1 || pList2)
+	if(!pList1 || !pList2)
 	{
+		logError("null pointer, pList1=%p, pList2=%p.", pList1, pList2); 
 		return NULL;
 	}
 
-	osListElement_t* pList2Head = pList2->head;
 	if(pList1->tail)
 	{
-		pList1->tail->next = pList2->head;
 		if(pList2->head)
 		{
 			pList2->head->prev = pList1->tail;
 		}
-		pList1->tail = pList2->tail;
+        pList1->tail->next = pList2->head;
+		pList2->tail ? pList1->tail = pList2->tail : noop;
 	}
 	else
 	{
@@ -739,6 +739,7 @@ osList_t* osList_combine(osList_t* pList1, osList_t* pList2)
 		pList1->tail = pList2->tail;
 	}
 
+    osListElement_t* pList2Head = pList2->head;
 	while(pList2Head)
 	{
 		pList2Head->list = pList1;

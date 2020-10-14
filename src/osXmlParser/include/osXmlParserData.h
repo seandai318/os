@@ -182,11 +182,5 @@ typedef struct {
 } osXmlTagInfo_t;
 
 
-typedef struct osXmlNameValue {
-    osPointerLen_t name;
-    osPointerLen_t value;
-} osXmlNameValue_t;
-
-
 
 #endif

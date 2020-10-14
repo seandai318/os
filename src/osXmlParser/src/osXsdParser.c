@@ -1241,11 +1241,11 @@ osStatus_e osXsd_elemCallback(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t*
 	{
        	if(pXsdElem->fixed.p && pXsdElem->fixed.l > 0)
         {
-        	status = osXml_xmlCallback(pXsdElem, &pXsdElem->fixed, callbackInfo, NULL);
+        	status = osXml_xmlCallback(pXsdElem, &pXsdElem->fixed, NULL, callbackInfo, NULL);
         }
         else if(pXsdElem->elemDefault.p && pXsdElem->elemDefault.l > 0)
         {
-        	status = osXml_xmlCallback(pXsdElem, &pXsdElem->elemDefault, callbackInfo, NULL);
+        	status = osXml_xmlCallback(pXsdElem, &pXsdElem->elemDefault, NULL, callbackInfo, NULL);
 		}
 
 		if(status != OS_STATUS_OK)

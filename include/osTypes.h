@@ -13,6 +13,9 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+
+#define noop ((void)0)
+
 typedef uint32_t socklen_t;
 
 
