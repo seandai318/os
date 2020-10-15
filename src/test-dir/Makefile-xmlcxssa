@@ -5,7 +5,7 @@ INC=$(IDIR:%=-I%)
 AR=ar
 
 #src = $(wildcard *.c)
-src = xmlCxSsa20200930.c 
+src = xmlCxSsa.c 
 obj = $(src:.c=.o)
 dep = $(obj:.o=.d)  # one dependency file for each source
 

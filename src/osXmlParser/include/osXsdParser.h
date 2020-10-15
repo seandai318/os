@@ -17,6 +17,7 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf, osPointerLen_t* xsdName);
 osPointerLen_t* osXsd_getXSAlias();
 void osXsd_setXSAlias(osPointerLen_t* pXsAlias);
 void osXsdElement_cleanup(void* data);
+void osXsd_freeNsList();
 
 
 #endif

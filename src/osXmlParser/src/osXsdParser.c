@@ -54,6 +54,60 @@ static void tempPrint(osList_t* pList, int i)
     }
 }
 
+
+osMBuf_t* osXsd_initNS(char* fileFolder, char* xsdFileName)
+{
+    osStatus_e status = OS_STATUS_OK;
+    osMBuf_t* xsdMBuf = NULL;
+
+    if(!fileFolder || !xsdFileName)
+    {
+        logError("null pointer, fileFolder=%p, xsdFileName=%p.", fileFolder, xsdFileName);
+        status = OS_ERROR_NULL_POINTER;
+        goto EXIT;
+    }
+
+    char xsdFile[OS_XML_MAX_FILE_NAME_SIZE];
+
+    if(snprintf(xsdFile, OS_XML_MAX_FILE_NAME_SIZE, "%s/%s", fileFolder ? fileFolder : ".", xsdFileName) >= OS_XML_MAX_FILE_NAME_SIZE)
+    {
+        logError("xsdFile name is truncated.");
+        status = OS_ERROR_INVALID_VALUE;
+    }
+
+    //8000 is the initial mBuf size.  If the reading needs more than 8000, the function will realloc new memory
+    xsdMBuf = osMBuf_readFile(xsdFile, 8000);
+    if(!xsdMBuf)
+    {
+        logError("read xsdMBuf fails.");
+        status = OS_ERROR_INVALID_VALUE;
+        goto EXIT;
+    }
+
+	osPointerLen_t xsdName = {xsdFileName, strlen(xsdFileName)};
+    if(!osXsd_isExistSchema(&xsdName))
+    {
+        logInfo("start xsd parse for %r.", &xsdName);
+        osXsdNamespace_t* pNS = osXsd_parse(xsdMBuf, &xsdName);
+        if(!pNS)
+        {
+            logError("fails to osXsd_parse for xsdMBuf.");
+            status = OS_ERROR_INVALID_VALUE;
+            goto EXIT;
+        }
+        logInfo("xsd parse for %r is done.", &xsdName);
+    }
+
+EXIT:
+	if(status != OS_STATUS_OK)
+	{
+		osMBuf_dealloc(xsdMBuf);
+		xsdMBuf = NULL;
+	}
+	return xsdMBuf;
+}
+
+
 osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf, osPointerLen_t* pXsdName)
 {
 	osStatus_e status = OS_STATUS_OK;
@@ -74,6 +128,7 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf, osPointerLen_t* pXsdName)
 		goto EXIT;
 	}
 
+	//for now assume the same schema is only inputed/parsed one time.  In the future, for safety, add a xsd name check to prevent the same schema been parsed multiple times
 	pNS = osXsd_getNS(&gXsdNSList, &pSchema->schemaInfo.targetNS, true);
 	if(!pNS)
 	{
@@ -109,7 +164,7 @@ EXIT:
 	}
 
 	return pNS;
-}
+} //osXsd_parse()
 	
 
 osXsdSchema_t* osXsd_parseSchema(osMBuf_t* pXmlBuf)	
@@ -250,7 +305,7 @@ EXIT:
 }
 
 
-bool osXsd_isValid(osMBuf_t* pXsdBuf, osPointerLen_t* xsdName)
+bool osXsd_isValid(osMBuf_t* pXsdBuf, osPointerLen_t* xsdName, bool isKeepNsList)
 {
     if(!pXsdBuf || !xsdName)
     {
@@ -265,7 +320,11 @@ bool osXsd_isValid(osMBuf_t* pXsdBuf, osPointerLen_t* xsdName)
         return false;
     }
 
-    osfree(pNS);
+	if(!isKeepNsList)
+	{
+		osList_delete(&gXsdNSList);
+	}
+
     return true;
 }
 
@@ -1260,6 +1319,58 @@ EXIT:
 }
 
 
+/* first assume pTargetNS is a real NS target name.  if does not ind match, assume pTargetNS is a xsd name, search schema within a NULL NS
+ */
+bool osXsd_isExistSchema(osPointerLen_t* pTargetNS)
+{
+    osXsdNamespace_t* pNS = NULL;
+	osXsdNamespace_t* pNullNS = NULL;
+	bool isExistNS = false;
+
+    if(!pTargetNS)
+    {
+        logError("NULL pointer, pTargetNS=%p.", pTargetNS);
+        goto EXIT;
+    }
+
+    osListElement_t* pLE = gXsdNSList.head;
+    while(pLE)
+    {
+		if(((osXsdNamespace_t*)pLE->data)->pTargetNS == NULL)
+		{
+			pNullNS = pLE->data;
+		}
+		else
+		{
+        	if(osPL_cmp(pTargetNS, ((osXsdNamespace_t*)pLE->data)->pTargetNS) == 0)
+        	{
+				isExistNS = true;
+            	goto EXIT;
+        	}
+		}
+        pLE = pLE->next;
+    }
+
+	//check if there is a schema in the null NS that matches the target name
+	if(pNullNS)
+	{
+        osListElement_t* pLE1 = pNS->schemaList.head;
+        while(pLE1)
+        {
+			if(osPL_cmp(&((osXsdSchema_t*)pLE1->data)->schemaInfo.targetNS, pTargetNS) == 0)
+			{
+				isExistNS = true;
+				break;
+			}
+
+			pLE1 = pLE1->next;
+		}
+	}
+
+EXIT:
+	return isExistNS;
+}
+	
 
 static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS, bool isCreateNS)
 {
@@ -1274,11 +1385,11 @@ static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTarg
 	osListElement_t* pLE = pXsdNSList->head;
 	while(pLE)
 	{
-		if(osPL_cmp(pTargetNS, &((osXsdSchema_t*)pLE->data)->schemaInfo.targetNS) == 0)
-		{
-			pNS = pLE->data;
-			goto EXIT;
-		}
+		if(osPL_cmp(pTargetNS, ((osXsdNamespace_t*)pLE->data)->pTargetNS) == 0)
+        {
+        	pNS = pLE->data;
+            goto EXIT;
+        }
 
 		pLE = pLE->next;
 	}
@@ -1438,4 +1549,10 @@ void osXsdNS_cleanup(void* data)
     }
 
 	osList_delete(&((osXsdNamespace_t*)data)->schemaList); 
+}
+
+
+void osXsd_freeNsList()
+{
+	osList_delete(&gXsdNSList);
 }

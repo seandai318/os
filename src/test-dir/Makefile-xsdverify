@@ -5,7 +5,7 @@ INC=$(IDIR:%=-I%)
 AR=ar
 
 #src = $(wildcard *.c)
-src = xmlShUda.c 
+src = xsdverify.c 
 obj = $(src:.c=.o)
 dep = $(obj:.o=.d)  # one dependency file for each source
 
@@ -23,7 +23,7 @@ endif
 
 LDFLAGS = -L$(OS_OBJ_DIR) -los -lpthread -lrt
 
-xmlshuda: $(obj) libos.a
+xsdverify: $(obj) libos.a
 	$(CC) -o $@ $(CFLAGS) $(filter %.o, $^) $(LDFLAGS)
 #	$(AR) -cr $@ $^
 

@@ -51,7 +51,7 @@ typedef struct {
  	
 typedef struct {
     bool isXmlParseDone;			//indicate if xml parsing is done
-	osList_t gNSList;				//store the xml ns list.  Clear it when the xml parse is done
+	osList_t gNSList;				//each entry contains osXml_nsInfo_t(pXmlnsInfo), or osXsd_nsAliasInfo_t(pnsAlias) that are allocated during a xml parsing for the purpose of freeing them when parsng is done
 	osXml_nsInfo_t* pCurXmlInfo;	//the current pXmlnsInfo for a xml under parse
 	osList_t xsdElemPointerList;	//xsdPointer stack.  Each <element>'s xsdPointer will be pushed into the stack, and pop out in </element> handling
     osXsd_elemPointer_t* pParentXsdPointer;
@@ -67,7 +67,7 @@ typedef struct {
 static bool isExistXsdAnyElem(osXsd_elemPointer_t* pXsdPointer);
 static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, osXmlElemDispType_e* pParentXsdDispType, int* listIdx);
 static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer);
-static osStatus_e osXml_getNsInfo(osList_t* pAttrNVList, osXml_nsInfo_t** ppNsInfo, osList_t* pNoXmlnsAttrList);
+static osStatus_e osXml_getNsInfo(osList_t* pAttrNVList, osXml_nsInfo_t** ppNsInfo, osList_t* pNoXmlnsAttrList, osList_t* pgNSList);
 static bool osXml_isAliasExist(osPointerLen_t* pRootAlias, osList_t* pAliasList, osPointerLen_t** pRootNS);
 static void osXml_updateNsInfo(osXml_nsInfo_t* pNewNsInfo, osXml_nsInfo_t* pXsdPointerXmlnsInfo);
 static osListElement_t* osXml_isAliasMatch(osList_t* nsAliasList, osPointerLen_t* pnsAlias);
@@ -245,12 +245,13 @@ static osStatus_e osXml_parse(osMBuf_t* pBuf, osPointerLen_t* xsdName, osXmlData
 
 EXIT:
     osList_delete(&stateInfo.xsdElemPointerList);
+	osList_delete(&stateInfo.gNSList);
     if(pElemInfo)
     {
         osfree(pElemInfo);
     }
     return status;
-} //osXml_parse
+} //osXml_parse()
 
 
 /* process the root element. find the xmlns alias list, and the corresponding xsd rootElem */
@@ -268,7 +269,7 @@ static osStatus_e osXml_parseRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo,
     osXml_singleDelimitParse(&pElemInfo->tag, ':', &rootAlias, &rootElemName);
 
     //get the xmlns alias and attribute info based the parsed element tag (pElemInfo)
-    status = osXml_getNsInfo(&pElemInfo->attrNVList, &pXsdPointer->pXmlnsInfo, &noXmlnsAttrList);
+    status = osXml_getNsInfo(&pElemInfo->attrNVList, &pXsdPointer->pXmlnsInfo, &noXmlnsAttrList, &pStateInfo->gNSList);
     if(status != OS_STATUS_OK)
     {
     	logError("fails to osXml_getNsInfo() for element(%r).", &pElemInfo->tag);
@@ -319,8 +320,8 @@ static osStatus_e osXml_parseRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo,
     	pRootNS = &pXsdPointer->pXmlnsInfo->defaultNS;
     }
 
-    //save the nsInfoList in the global list for the purpose of memory free when the parse is done
-    osList_append(&pStateInfo->gNSList, pXsdPointer->pXmlnsInfo);
+//    //save the nsInfoList in the global list for the purpose of memory free when the parse is done
+//    osList_append(&pStateInfo->gNSList, pXsdPointer->pXmlnsInfo);
     pStateInfo->pCurXmlInfo = pXsdPointer->pXmlnsInfo;
 
     //now get the rootElem
@@ -706,7 +707,7 @@ static osStatus_e osXml_parseAnyRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemIn
 
 	//get the xmlns alias
 	osXml_nsInfo_t* pnsInfo = NULL;
-	status = osXml_getNsInfo(&pElemInfo->attrNVList, &pnsInfo, &noXmlnsAttrList);
+	status = osXml_getNsInfo(&pElemInfo->attrNVList, &pnsInfo, &noXmlnsAttrList, &pStateInfo->gNSList);
 	if(status != OS_STATUS_OK)
 	{
 		logError("fails to osXml_getNsInfo() for element(%r).", &pElemInfo->tag);
@@ -744,10 +745,10 @@ static osStatus_e osXml_parseAnyRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemIn
 		}
 	}
 
-	//save the nsInfoList in the global list for the purpose of memory free when the parse is done
+//	//save the nsInfoList in the global list for the purpose of memory free when the parse is done
 	if(pnsInfo)
 	{
-		osList_append(&pStateInfo->gNSList, pXsdPointer->pXmlnsInfo);
+//		osList_append(&pStateInfo->gNSList, pXsdPointer->pXmlnsInfo);
 		pStateInfo->pCurXmlInfo = pXsdPointer->pXmlnsInfo;
 	}
 
@@ -950,7 +951,6 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
     osStatus_e status = OS_STATUS_OK;
     osMBuf_t* xsdMBuf = NULL;
     osMBuf_t* xmlBuf = NULL;
-    osXsdElement_t* pXsdRoot = NULL;
 
     if(!xsdFileName || !xmlFileName)
     {
@@ -983,18 +983,7 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
         goto EXIT;
     }
 
-	logInfo("start xsd parse for %s.", xsdFileName);
-	osPointerLen_t xsdName = {xsdFileName, strlen(xsdFileName)};
-    osXsdNamespace_t* pNS = osXsd_parse(xsdMBuf, &xsdName);
-    if(!pNS)
-    {
-        logError("fails to osXsd_parse for xsdMBuf.");
-        status = OS_ERROR_INVALID_VALUE;
-        goto EXIT;
-    }
-	logInfo("xsd parse for %s is done.", xsdFileName);
-
-	//8000 is the initial mBuf size.  If the reading needs more than 8000, the function will realloc new memory
+    //8000 is the initial mBuf size.  If the reading needs more than 8000, the function will realloc new memory
     xmlBuf = osMBuf_readFile(xmlFile, 8000);
     if(!xmlBuf)
     {
@@ -1003,26 +992,62 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
         goto EXIT;
     }
 
-	logInfo("start xml parse for %s.", xmlFileName);
-    osXsdSchema_t* pSchema = pNS->schemaList.head->data;
-    status = osXml_parse(xmlBuf, &xsdName, callbackInfo);
-//    status = osXml_parse(xmlBuf, pXsdRoot, callbackInfo);
-	if(status != OS_STATUS_OK)
-	{
-		logError("xml parse for %s failed.", xmlFileName);
-		goto EXIT;
-	}
-
-	logInfo("xml parse for %s is done.", xmlFileName);
+    osPointerLen_t xsdName = {xsdFileName, strlen(xsdFileName)};
+	status = osXml_getElemValue(&xsdName, xsdMBuf, xmlBuf, false, callbackInfo);
 
 EXIT:
-    osfree(pXsdRoot);
-
     if(status != OS_STATUS_OK)
     {
         osMBuf_dealloc(xsdMBuf);
         osMBuf_dealloc(xmlBuf);
     }
+
+    return status;
+}
+
+
+osStatus_e osXml_getElemValue(osPointerLen_t* xsdName, osMBuf_t* xsdMBuf, osMBuf_t* xmlBuf, bool isKeepXsdNsList, osXmlDataCallbackInfo_t* callbackInfo)
+{
+    osStatus_e status = OS_STATUS_OK;
+
+    if(!xsdName || !xmlBuf)
+    {
+        logError("null pointer, xsdName=%p, xmlBuf=%p.", xsdName, xmlBuf);
+        status = OS_ERROR_NULL_POINTER;
+        goto EXIT;
+    }
+
+	osXsdNamespace_t* pNS = NULL;
+	//for now, assume a xsd is only asked to parse one time. need to add xsdname in the schema level to prevent multiple parse for the same xsd, to do
+	if(xsdMBuf)
+	{
+    	logInfo("start xsd parse for %r.", xsdName);
+    	pNS = osXsd_parse(xsdMBuf, xsdName);
+    	if(!pNS)
+    	{
+        	logError("fails to osXsd_parse for xsdName(%r).", xsdName);
+        	status = OS_ERROR_INVALID_VALUE;
+        	goto EXIT;
+    	}
+    	logInfo("xsd parse for %r is done.", xsdName);
+	}
+
+    logInfo("start xml parse.");
+//    osXsdSchema_t* pSchema = pNS->schemaList.head->data;
+    status = osXml_parse(xmlBuf, xsdName, callbackInfo);
+    if(status != OS_STATUS_OK)
+    {
+        logError("xml parse failed.");
+        goto EXIT;
+    }
+
+    logInfo("xml parse is done.");
+
+EXIT:
+	if(!isKeepXsdNsList)
+	{
+    	osXsd_freeNsList();
+	}
 
     return status;
 }
@@ -1307,23 +1332,27 @@ EXIT:
 }
 
 
-static osStatus_e osXml_getNsInfo(osList_t* pAttrNVList, osXml_nsInfo_t** ppNsInfo, osList_t* pNoXmlnsAttrList)
+static osStatus_e osXml_getNsInfo(osList_t* pAttrNVList, osXml_nsInfo_t** ppNsInfo, osList_t* pNoXmlnsAttrList, osList_t* pgNSList)
 {
 	osStatus_e status = OS_STATUS_OK;
 	
-	if(!pAttrNVList || !ppNsInfo)
+	if(!pAttrNVList || !ppNsInfo || !pgNSList)
 	{
-		logError("null pointer, pAttrNVList=%p, ppNsInfo=%p.", pAttrNVList, ppNsInfo);
+		logError("null pointer, pAttrNVList=%p, ppNsInfo=%p, pgNSList=%p.", pAttrNVList, ppNsInfo, pgNSList);
 		return OS_ERROR_NULL_POINTER;
 	}
 
 	*ppNsInfo = oszalloc(sizeof(osXml_nsInfo_t), osXmlNsInfo_cleanup);
+
+	osPointerLen_t nsAlias;
+	osXsd_nsAliasInfo_t* pnsAlias;
 	osListElement_t* pLE = pAttrNVList->head;
 	while(pLE)
 	{
-        osXsd_nsAliasInfo_t* pnsAlias = oszalloc(sizeof(osXsd_nsAliasInfo_t), NULL);
-		if(osXml_singleDelimitMatch("xmlns", 5, ':', &((osXmlNameValue_t*)pLE->data)->name, false, &pnsAlias->nsAlias))
+        if(osXml_singleDelimitMatch("xmlns", 5, ':', &((osXmlNameValue_t*)pLE->data)->name, false, &nsAlias))
 		{
+			pnsAlias = oszalloc(sizeof(osXsd_nsAliasInfo_t), NULL);
+			pnsAlias->nsAlias = nsAlias;
 			pnsAlias->ns = ((osXmlNameValue_t*)pLE->data)->value;
 			if(!pnsAlias->nsAlias.l)
 			{
@@ -1340,6 +1369,8 @@ static osStatus_e osXml_getNsInfo(osList_t* pAttrNVList, osXml_nsInfo_t** ppNsIn
 			}
 
 			osList_append(&(*ppNsInfo)->nsAliasList, pnsAlias);
+			//store each nsalias in pnsAlias so that it can be freed when the aprser is done.  Do nor want to store ppNsInfo, because in the course of xml parsing, multiple ppNsInfo may use the same pnsAlias.
+			osList_append(pgNSList, pnsAlias);
 		}
 		else if(pNoXmlnsAttrList)
 		{
@@ -1357,6 +1388,8 @@ EXIT:
 		*ppNsInfo = osfree(*ppNsInfo);	
 	}
 
+	//also store ppNsInfo in pgNSList, as ppNsInfo will be pointed by each child element
+	osList_append(pgNSList, *ppNsInfo);
 	return status;
 }
 
@@ -1465,5 +1498,6 @@ static void osXmlNsInfo_cleanup(void* data)
 	}
 
 	osXml_nsInfo_t* pnsInfo = data;
-	osList_delete(&pnsInfo->nsAliasList);
+	//do not use osList_delete(), as nsAlias is seperately stored in gNSList
+	osList_clear(&pnsInfo->nsAliasList);
 }

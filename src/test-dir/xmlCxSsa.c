@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "osMemory.h"
 #include "osPreMemory.h"
@@ -146,7 +147,7 @@ int main(int argc, char* argv[])
     osDbg_init(DBG_DEBUG, DBG_ALL);
     osDbg_mInit(LM_XMLP, DBG_DEBUG);
 
-    //osDbg_mInit(LM_MEM, DBG_DEBUG);
+    osDbg_mInit(LM_MEM, DBG_DEBUG);
 
 	osmem_stat();
 	osmem_allusedinfo();
@@ -158,17 +159,37 @@ int main(int argc, char* argv[])
 	osMBuf_t* xmlMBuf = osMBuf_readFile(argv[2], 6000);
 #endif
 
+	osMBuf_t* xsdMBuf = osXsd_initNS(".", argv[1]);
+	if(!xsdMBuf)
+	{
+		debug("fails to osXsd_initNS for %s", argv[1]);
+		goto EXIT;
+	}
+
+    osMBuf_t* xmlMBuf = osMBuf_readFile(argv[2], 8000);
+    if(!xmlMBuf)
+    {
+        logError("read xmlMBuf fails.");
+        goto EXIT;
+    }
+
 	osXmlDataCallbackInfo_t cbInfo={true, false, true, callback, testConfig_xmlData, TEST_XML_MAX_DATA_NAME_NUM};
-	osXml_getLeafValue(".", argv[1], argv[2], &cbInfo);
+
+	osPointerLen_t xsdName = {argv[1], strlen(argv[1])};
+	osXml_getElemValue(&xsdName, NULL, xmlMBuf, false, &cbInfo);
+//	osXml_getLeafValue(".", argv[1], argv[2], &cbInfo);
 #if 0
 	bool isValid = osXml_isXmlValid(xmlMBuf, xsdMBuf, false, &cbInfo);	
 	debug("xml is parsed %s.", isValid ? "OK" : "NOT OK");
 #endif
 
-#if 0    
+EXIT:
+#if 1    
 	osmem_stat();
     osmem_allusedinfo();
 
+#endif
+#if 1
 	osMBuf_dealloc(xsdMBuf);
 	osMBuf_dealloc(xmlMBuf);
 

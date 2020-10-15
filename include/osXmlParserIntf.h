@@ -67,10 +67,14 @@ typedef struct osXmlNameValue {
 } osXmlNameValue_t;
 
 
-//get xml leaf node value based on the xsd and xml files
+//get xml instance element value based on xsd and xml mBuf
+osStatus_e osXml_getElemValue(osPointerLen_t* xsdName, osMBuf_t* xsdMBuf, osMBuf_t* xmlBuf, bool isKeepXsdNsList, osXmlDataCallbackInfo_t* callbackInfo);
+//get xml instance element value based on the xsd and xml files.  this function will free the xsd NS list
 osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFileName, osXmlDataCallbackInfo_t* callbackInfo);
+osMBuf_t* osXsd_initNS(char* fileFolder, char* xsdFileName);
+bool osXsd_isExistSchema(osPointerLen_t* pTargetNS);
 osPointerLen_t* osXml_getnsInfo(void* pnsAliasInfo);
-bool osXsd_isValid(osMBuf_t* pXsdBuf, osPointerLen_t* xsdName);
+bool osXsd_isValid(osMBuf_t* pXsdBuf, osPointerLen_t* xsdName, bool isKeepNsList);
 bool osXml_isValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osPointerLen_t* xsdName, osXmlDataCallbackInfo_t* callbackInfo);
 
 
