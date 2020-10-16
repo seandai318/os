@@ -390,7 +390,7 @@ void* osList_deleteElement(osList_t* pList, osListApply_h applyHandler, void *ar
 
 
 //each element contains a data structure pointer, the input arg is the address of the data structure, i.e., pointer
-void* osList_deletePtrElement(osList_t* pList, void*arg)
+void* osList_deletePtrElement(osList_t* pList, void* arg)
 {
 	if(!pList || !arg)
 	{
@@ -401,7 +401,7 @@ void* osList_deletePtrElement(osList_t* pList, void*arg)
 	void* pData = NULL;
 	while(pLE)
 	{
-		if(pLE->data = arg)
+		if(pLE->data == arg)
 		{ 
 			pData = pLE->data;
 			osList_unlinkElement(pLE);

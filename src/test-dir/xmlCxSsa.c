@@ -173,7 +173,7 @@ int main(int argc, char* argv[])
         goto EXIT;
     }
 
-	osXmlDataCallbackInfo_t cbInfo={true, false, true, callback, testConfig_xmlData, TEST_XML_MAX_DATA_NAME_NUM};
+	osXmlDataCallbackInfo_t cbInfo={false, true, true, callback, testConfig_xmlData, TEST_XML_MAX_DATA_NAME_NUM};
 
 	osPointerLen_t xsdName = {argv[1], strlen(argv[1])};
 	osXml_getElemValue(&xsdName, NULL, xmlMBuf, false, &cbInfo);

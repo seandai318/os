@@ -51,7 +51,7 @@ bool osXml_findPattern(osMBuf_t* pXmlBuf, osPointerLen_t* pPattern, bool isAdvan
             }
         }
 
-        if(pXmlBuf->buf[pXmlBuf->pos] != pPattern->p[i]);
+        if(pXmlBuf->buf[pXmlBuf->pos] != pPattern->p[i])
         {
             ++pXmlBuf->pos;
             ++i;

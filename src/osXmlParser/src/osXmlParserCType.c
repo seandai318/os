@@ -393,10 +393,16 @@ osStatus_e osXsd_transverseCT(osXsd_ctPointer_t* pCTPointer, osXmlDataCallbackIn
 
 			if(!osXml_isXsdElemSimpleType(pChildElem))
             {
+#if 0
                 osXsd_ctPointer_t* pNextCTPointer = oszalloc(sizeof(osXsd_ctPointer_t), NULL);
                 pNextCTPointer->pCT = pChildElem->pComplex;
                 status = osXsd_transverseCT(pNextCTPointer, callbackInfo);
                 osfree(pNextCTPointer);
+#else
+				osXsd_ctPointer_t nextCtPointer = {};
+				nextCtPointer.pCT = pChildElem->pComplex;
+				status = osXsd_transverseCT(&nextCtPointer, callbackInfo);
+#endif
 				if(status != OS_STATUS_OK)
 				{
 					goto EXIT;

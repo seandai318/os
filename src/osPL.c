@@ -410,6 +410,8 @@ int osPL_modifyu32(osPointerLen_t* pl, uint32_t n)
 	{
 		*((char*)pl->p + i) = newStr[j];
 	}
+
+	return 0;
 }
 
 /**

@@ -338,6 +338,8 @@ logError("to-remove, mb->end=%ld, mb->pos=%ld", mb->end,  mb->pos);
 	}
 
 	memcpy(mb->buf + pos, str, strLen);
+
+	return 0;
 }
 	
 
@@ -1054,7 +1056,6 @@ ssize_t osMbuf_findValue(osMBuf_t* pBuf, char tag1, char tag2, bool isExclSpace,
 		return -1;
 	}
 
-osPointerLen_t temp={&pBuf->buf[pos], len};
 	if(isExclSpace)
 	{
 		size_t end = pos+len;

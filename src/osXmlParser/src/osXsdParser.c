@@ -288,16 +288,24 @@ osStatus_e osXsd_browseNode(osXsdElement_t* pXsdElem, osXmlDataCallbackInfo_t* c
 	status = osXsd_elemCallback(pXsdElem, callbackInfo);
 	if(status != OS_STATUS_OK)
 	{
+		logError("fails to osXsd_elemCallback for element(%r).", &pXsdElem->elemName);
 		goto EXIT;
 	}
 
 	if(pXsdElem->dataType == OS_XML_DATA_TYPE_COMPLEX)
 	{
+#if 0	//somehow making pCTPointer a dynamic variable caused program crash.  Nevertheless, make it a local variable is a better choice
     	osXsd_ctPointer_t* pCTPointer = oszalloc(sizeof(osXsd_ctPointer_t), NULL);
     	pCTPointer->pCT = pXsdElem->pComplex;
     	pCTPointer->doneListIdx = 0;
     	status = osXsd_transverseCT(pCTPointer, callbackInfo);
     	osfree(pCTPointer);
+#else
+        osXsd_ctPointer_t ctPointer = {};
+        ctPointer.pCT = pXsdElem->pComplex;
+        ctPointer.doneListIdx = 0;
+        status = osXsd_transverseCT(&ctPointer, callbackInfo);
+#endif
 	}
 
 EXIT:
@@ -519,7 +527,6 @@ static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pCTypeList, 
             {
                 logError("simple global type is NULL or has no typeName, pSimpleInfo=%p, typeName.l=%ld.", pSimpleInfo, pSimpleInfo ? pSimpleInfo->typeName.l : 0);
 
-int i=100/pSimpleInfo->typeName.l;
                 if(pSimpleInfo)
                 {
                     osfree(pSimpleInfo);

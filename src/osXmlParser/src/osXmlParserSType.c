@@ -632,6 +632,9 @@ osStatus_e osXmlSimpleType_convertData(osXmlSimpleType_t* pSimple, osPointerLen_
 
             break;
         }	//case OS_XML_DATA_TYPE_XS_STRING
+		default:
+			mlogInfo(LM_XMLP, "pSimple->baseType=%d, ignored.", pSimple->baseType);
+			break;
 	} 	//switch(pSimple->baseType)
 
 EXIT:
