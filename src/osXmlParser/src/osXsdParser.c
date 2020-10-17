@@ -710,8 +710,6 @@ EXIT:
  */
 osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagInfo)
 {
-	DEBUG_BEGIN
-
 	osStatus_e status = OS_STATUS_OK;
     osList_t tagList = {};
 	osXsdElement_t* pElement = NULL;
@@ -814,7 +812,6 @@ EXIT:
 
 	osList_delete(&tagList);
 
-	DEBUG_END
 	return pElement;
 }
 

@@ -978,7 +978,7 @@ osStatus_e osXml_getLeafValue(char* fileFolder, char* xsdFileName, char* xmlFile
     xsdMBuf = osMBuf_readFile(xsdFile, 8000);
     if(!xsdMBuf)
     {
-        logError("read xsdMBuf fails.");
+        logError("read xsdMBuf fails, xsdFile=%s", xsdFile);
         status = OS_ERROR_INVALID_VALUE;
         goto EXIT;
     }
@@ -1064,7 +1064,6 @@ EXIT:
  */
 osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, const osList_t* pNoXmlnsAttrList, osXmlDataCallbackInfo_t* callbackInfo, void* pCurXmlInfo)
 {
-	DEBUG_BEGIN
 	osStatus_e status = OS_STATUS_OK;
 	bool isLeaf = true;
 
