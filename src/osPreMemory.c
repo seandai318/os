@@ -29,7 +29,7 @@
 
 #include "osTypes.h"
 #include "osDebug.h"
-
+#include "osPL.h"
 #include "osPreMemory.h"
 
 
@@ -97,6 +97,7 @@ static uint32_t ialloc = 0;
 static uint32_t totalUsedCount = 0;
 #endif
 
+
 void osPreMem_init()
 {
 	//sanity check
@@ -105,6 +106,7 @@ void osPreMem_init()
 		if(osPreMemNum[i] > OS_PREMEM_MAX_CHUNK_SIZE)
 		{
 			logError("pre-allocated memory size for idx=%d is larger than allowed(%d).", i, OS_PREMEM_MAX_CHUNK_SIZE);
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -121,12 +123,16 @@ void osPreMem_init()
 		if(!osPreMemUnused[i].blockStart || !osPreMemUnused[i].end)
 		{
 			logError("allocate memory for osPreMem[%d] fails, memsize=%d.", i, osPreMemSize[i]);
+            exit(EXIT_FAILURE);
 		}
 		
         if(pthread_mutex_init(&osPreMemUnused[i].mutex, NULL) !=0)
 		{
 			logError("osPreMemUnused[%d] mutex init failed.", i);
+            exit(EXIT_FAILURE);
 		}
+
+       	logInfo("osPreMemUnused[%d].blockStart=%p, end=%p, size=%d, count=%d\n", i, osPreMemUnused[i].blockStart, osPreMemUnused[i].end, osPreMemUnused[i].size, osPreMemUnused[i].count);
 
 #ifdef PREMEM_DEBUG
 		osPreMemUsed[i].size = osPreMemSize[i];
@@ -137,6 +143,7 @@ void osPreMem_init()
 		if(pthread_mutex_init(&osPreMemUsed[i].mutex, NULL) !=0)
         {
             logError("osPreMemUsed[%d] mutex init failed.", i);
+            exit(EXIT_FAILURE);
         }
 #endif
 	}
@@ -151,6 +158,7 @@ void osPreMem_init()
 		if(pthread_mutex_init(pMutex, NULL) != 0)
 		{
             logError("osPreMem mutex poll init failed.");
+            exit(EXIT_FAILURE);
 		}
 	}
 }
@@ -210,7 +218,6 @@ static void* osPreMem_get(uint32_t size, bool isPrintDebug)
 			osPreMemBlockHdr_t* pBlock = osPreMemUnused[i].next;
 			osPreMemUnused[i].next = pBlock->nextBlock;
 			pBlock->nextBlock = NULL;
-
 #ifdef PREMEM_DEBUG
 			if(osPreMemUnused[i].relCount == 0)
 			{
@@ -236,6 +243,7 @@ static void* osPreMem_get(uint32_t size, bool isPrintDebug)
 			{
 				osPreMemUsed[i].usedHead = pBlock;
 			}
+
 			if(osPreMemUsed[i].usedTail)
 			{
 				osPreMemUsed[i].usedTail->usedNext = pBlock;

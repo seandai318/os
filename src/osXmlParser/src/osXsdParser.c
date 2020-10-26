@@ -182,7 +182,7 @@ osXsdSchema_t* osXsd_parseSchema(osMBuf_t* pXmlBuf)
 
 	bool isSchemaTagDone = false;
     bool isEndSchemaTag = false;
-	pSchema = oszalloc(sizeof(pSchema), osXsdSchema_cleanup);
+	pSchema = oszalloc(sizeof(osXsdSchema_t), osXsdSchema_cleanup);
 	//parse <xs:schema xxxx>
 	if(osXsd_parseSchemaTag(pXmlBuf, &pSchema->schemaInfo, &isSchemaTagDone) != OS_STATUS_OK)
     {
@@ -1279,6 +1279,7 @@ osPointerLen_t* osXsd_getXSAlias()
 }
 
 
+//this function shall only be used within xsd parser module, shall not be called by xml module
 void osXsd_setXSAlias(osPointerLen_t* pXsAlias)
 {
 	pCurXSAlias = pXsAlias;
@@ -1405,7 +1406,7 @@ static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTarg
 EXIT:
 	return pNS;
 }
-	
+
 
 /* get a global element from a NS based on element tag.  The NS is identified from global gXsdNSList based on NS name
  * 

@@ -182,6 +182,7 @@ osStatus_e osXsdComplexType_getSubTagInfo(osXmlComplexType_t* pCtInfo, osXmlTagI
 				mdebug(LM_XMLP, "element(%r) is parsed, minOccurs=%d, maxOccurs=%d, dataType=%d", &pElement->elemName, pElement->minOccurs, pElement->maxOccurs, pElement->dataType);
         		osList_append(&pCtInfo->elemList, pElement);
                 isIgnored = false;
+logError("to-remove, osXsd_getXSAlias()=%r", osXsd_getXSAlias());
     		}
 			break;
 		case 8:		//len=8, "sequence"
@@ -222,6 +223,7 @@ osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pC
     }
 
     pCtInfo = osmalloc(sizeof(osXmlComplexType_t), osXmlComplexType_cleanup);
+logError("to-remove, pCtInfo=%p", pCtInfo);
     osXsdComplexType_getAttrInfo(&pCtTagInfo->attrNVList, pCtInfo);
 
     while(pXmlBuf->pos < pXmlBuf->end)
@@ -240,10 +242,10 @@ osXmlComplexType_t* osXsdComplexType_parse(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pC
         	osListElement_t* pLE = osList_popTail(&tagList);
             if(!pLE)
             {
-            	//"xs:complexType" was not pushed into tagList, so it is possible the end tag is "xs:complexType"
+            	//"xs:complexType" was not pushed into tagList, this happens for global complexType.
 				if(osXml_xsTagCmp("complexType", 11, &pTagInfo->tag))
                 {
-                	logError("expect the end tag for xs:complexType, but %r is found.", &((osXmlTagInfo_t*)pLE->data)->tag);
+                	logError("expect the end tag for xs:complexType, but %r is found.", &pTagInfo->tag);
             		status = OS_ERROR_INVALID_VALUE;
                 }
                 else

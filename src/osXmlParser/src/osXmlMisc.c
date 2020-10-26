@@ -145,10 +145,12 @@ EXIT:
 
 int osXml_tagCmp(osPointerLen_t* pNsAlias, char* str, int strLen, osPointerLen_t* pTag)
 {
+	int returnValue = -1;
+	
     if(!pNsAlias ||!str||!pTag)
     {
         logError("null pointer, pNsAlias=%p, str=%p, pTag=%p.", pNsAlias, str, pTag);
-        return -1;
+        goto EXIT;
     }
 
 	//need to consider the delimit ':'
@@ -156,30 +158,40 @@ int osXml_tagCmp(osPointerLen_t* pNsAlias, char* str, int strLen, osPointerLen_t
 	{
 		if(pTag->l - pNsAlias->l -1 != strLen)
 		{
-        	return -1;
+        	goto EXIT;
 		}
 
 		if(strncmp(pTag->p, pNsAlias->p, pNsAlias->l) != 0)
 	    {
-    	    return -1;
-    	}
+    		goto EXIT;
+		}
 
 		if(pTag->p[pNsAlias->l] != ':')
 		{
-			return -1;
+            goto EXIT;
 		}
 
-		return strncmp(str, &pTag->p[pNsAlias->l+1], pTag->l - pNsAlias->l-1);
+		returnValue = strncmp(str, &pTag->p[pNsAlias->l+1], pTag->l - pNsAlias->l-1);
 	}
 	else
 	{
 		if(pTag->l != strLen)
 		{
-			return -1;
+			goto EXIT;
 		}
 
-    	return strncmp(str, pTag->p, pTag->l);
+    	returnValue = strncmp(str, pTag->p, pTag->l);
 	}
+
+EXIT:
+#if 1	//to-remove
+//	if(returnValue)
+	{
+		logError("to-remove, pTag->l=%ld, pNsAlias->l=%ld, strLen=%ld, pTag=%r, pNsAlias=%r", pTag->l, pNsAlias->l, strLen, pTag, pNsAlias);
+	}
+#endif
+
+	return returnValue;
 }
 
 

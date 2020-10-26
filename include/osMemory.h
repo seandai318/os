@@ -14,6 +14,7 @@
 
 //use _r if a allocated memory block may be accessed simultaneously by multiple threads.
 //function name ending with 1 does not print the memory alloc/dealloc info
+//_r is for case that multiple threads may modify the same allocated memory simultaneously
 #ifdef PREMEM
 
 #ifndef PREMEM_DEBUG

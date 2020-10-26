@@ -32,7 +32,7 @@ static struct osDbg {
 };
 
 
-static osDbgLevel_e osDbgMLevel[LM_ALL];
+static osDbgLevel_e osDbgMLevel[LM_ALL+1];
 
 
 
