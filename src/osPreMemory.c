@@ -79,6 +79,7 @@ static void* osPreMem_alloc_internal(size_t size, osPreMemFree_h dh, bool isNeed
 static void* osPreMem_realloc_internal(void* pData, size_t size, bool isPrintDebug);
 static void osPreMem_release(void* ptr, bool isPrintDebug);
 static void* osPreMem_free_internal(void *pData, bool isPrintDebug);
+static void osPreMem_dumpAllocMemInfo();
 #ifdef PREMEM_DEBUG
 static void* osPreMem_allocDebug_internal(size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line, bool isPrintDebug);
 static void* osPreMem_dallocDebug_internal(const void* src, size_t size, osPreMemFree_h dh, bool isNeedMutex, char* file, const char* func, int line, bool isPrintDebug);
@@ -132,8 +133,6 @@ void osPreMem_init()
             exit(EXIT_FAILURE);
 		}
 
-       	logInfo("osPreMemUnused[%d].blockStart=%p, end=%p, size=%d, count=%d\n", i, osPreMemUnused[i].blockStart, osPreMemUnused[i].end, osPreMemUnused[i].size, osPreMemUnused[i].count);
-
 #ifdef PREMEM_DEBUG
 		osPreMemUsed[i].size = osPreMemSize[i];
 		osPreMemUsed[i].count = 0;
@@ -147,6 +146,8 @@ void osPreMem_init()
         }
 #endif
 	}
+
+	osPreMem_dumpAllocMemInfo();
 
 	pthread_mutex_t* pMutex;
 	osPreMemBlockHdr_t* pBlock;
@@ -1016,5 +1017,29 @@ void* osPreMem_reallocDebug1(void* pData, size_t size, char* file, const char* f
     return osPreMem_reallocDebug_internal(pData, size, file, func, line, false);
 }
 
-
 #endif
+
+static void osPreMem_dumpAllocMemInfo()
+{
+#define OS_PREMEM_MAX_DUMP_LINE_SIZE	80	//include CRLF
+	int maxDumpSize = OS_PREMEM_MAX_DUMP_LINE_SIZE * (OS_PREMEM_MAX_IDX+1);
+	char* pDump = malloc(maxDumpSize);
+	
+	int m, n=0;
+	for (int i=0; i<=OS_PREMEM_MAX_IDX; i++)
+	{
+		m = snprintf(&pDump[n], OS_PREMEM_MAX_DUMP_LINE_SIZE, "%3d  %p  %p  %8d  %8d\n", i, osPreMemUnused[i].blockStart, osPreMemUnused[i].end, osPreMemUnused[i].size, osPreMemUnused[i].count); 
+		n += m;
+		if(m >= OS_PREMEM_MAX_DUMP_LINE_SIZE || n > maxDumpSize)
+		{
+			logError("i=%d, the line size(%d) exceeds max allowed(%d) or the dump size(%d) exceed maximum allowed(%d).", i, m, OS_PREMEM_MAX_DUMP_LINE_SIZE, n, maxDumpSize);
+			goto EXIT;
+		}
+	}
+		
+	logInfo("The initial unused pre-memory blcok(osPreMemUnused) info:\n  i  %14s  %14s  %8s  %8s\n%s", "blockStart", "end", "size", "count", pDump);
+
+EXIT:
+	free(pDump);
+	return;
+}	
