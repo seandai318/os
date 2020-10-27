@@ -48,7 +48,6 @@ static __thread int isTimerReady=0;
 static __thread timeoutCallBackFunc_t onTimeout;
 static __thread osList_t tickList = {};
 static __thread int debugCount=0; 
-//static __thread int itick = 0;
 
 // this function shall be called once by application in the same thread once 
 int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeoutCallBackFunc_t callBackFunc)
@@ -75,19 +74,6 @@ int osTimerInit(int localWriteFd, int remoteWriteFd, int timeoutMultiple, timeou
 
 	mdebug(LM_TIMER, "received pMsg=%p\n", pMsg);
 
-	//pipePtrMsg.ptr = pIPCMsg;
-	
-//	testa=15;
-//	printf("debug, osTimerInit, testa=%d, testa addr=%p\n", testa, &testa);
-//	void* pTesta = &testa;
-//	char* tt=(char*) pIPCMsg;
-//	printf("debug, osTimerInit, byte1=%x,byte2=%x, byte3=%x, byte4=%x, bute5=%x, byte6=%x, byte7=%x, byte8=%x\n", tt[0], tt[1], tt[2], tt[3], tt[4], tt[5], tt[6], tt[7]);
-//	struct tdebug {
-//		void* ptr;
-//	};
-//	struct tdebug tttt;
-//	tttt.ptr = &testa;
-//	write(writeFd, (void*) &tttt, sizeof(struct tdebug));
 	write(writeFd, (void*) &ipcMsg, sizeof(osIPCMsg_t));
 	timerSubChainInterval = timeoutMultiple * OS_TIMER_MIN_TIMEOUT_MS;
 	
@@ -134,8 +120,6 @@ int osTimerGetMsg(osInterface_e intf, void* pMsg, timerReadyFunc_h timerReadyFun
 			break;
 		}
 		case OS_TIMER_TICK:
-//		mdebug(LM_TIMER, "debugCount=%d", ++debugCount);
-//			printf("osTimer, itick=%d\n", itick++);
 			osTimerTickExpire();
 			break;
 		default:
