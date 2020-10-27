@@ -184,13 +184,6 @@ int osXml_tagCmp(osPointerLen_t* pNsAlias, char* str, int strLen, osPointerLen_t
 	}
 
 EXIT:
-#if 1	//to-remove
-//	if(returnValue)
-	{
-		logError("to-remove, pTag->l=%ld, pNsAlias->l=%ld, strLen=%ld, pTag=%r, pNsAlias=%r", pTag->l, pNsAlias->l, strLen, pTag, pNsAlias);
-	}
-#endif
-
 	return returnValue;
 }
 
