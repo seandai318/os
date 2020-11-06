@@ -51,8 +51,11 @@ void osPL_setStr(osPointerLen_t *pl, const char *str, size_t len)
         return;
     }
 
+	len == 0 ? osPL_setStr1(pl, str, strlen(str)) : osPL_setStr1(pl, str, len);
+#if 0
     pl->p = str;
     pl->l = !len ? strlen(str) : len;
+#endif
 }
 
 
@@ -414,6 +417,7 @@ int osPL_modifyu32(osPointerLen_t* pl, uint32_t n)
 	return 0;
 }
 
+#if 0
 /**
  * Check if pointer-length object is set
  *
@@ -425,6 +429,7 @@ bool osPL_isset(const osPointerLen_t *pl)
 {
 	return pl ? pl->p && pl->l : false;
 }
+#endif
 
 
 /**

@@ -24,6 +24,7 @@ LDFLAGS = -lpthread
 
 libos.a: $(obj)
 	$(AR) -cr $@ $^
+	make clean
 
 -include $(dep)   # include all dep files in the makefile
 
@@ -32,7 +33,6 @@ libos.a: $(obj)
 %.d: %.c
 	@mkdir -p $(dir $@)
 	$(CPP) $(CFLAGS) $< -MM -MT $(@:.d=.o) >$@
-
 
 .PHONY: clean
 clean:

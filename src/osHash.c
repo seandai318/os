@@ -127,6 +127,78 @@ out:
 }
 
 
+osListElement_t* osPlHash_addUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase, void* userData)
+{
+	osStatus_e status = OS_STATUS_OK;
+
+	if(!h || !plKey || !userData)
+	{
+		logError("null pointer, h=%p, plKey=%p, userData=%p.", h, plKey, userData);
+		return NULL;
+	}
+
+	osListElement_t* pLE = NULL;
+
+	osHashData_t* pHashData = oszalloc(sizeof(osHashData_t), NULL);
+    if(!pHashData)
+    {
+        logError("fails to allocate pHashData.");
+        status = OS_ERROR_MEMORY_ALLOC_FAILURE;
+        goto EXIT;
+    }
+
+    uint32_t key = osHash_getKeyPL(plKey, isCase);
+
+    pHashData->hashKeyType = OSHASHKEY_STR;
+	pHashData->hashKeyStr.str = plKey->p;
+	pHashData->hashKeyStr.len = plKey->l;
+	pHashData->hashKeyStr.isCase = isCase;
+    pHashData->pData = userData;
+
+	pLE = osHash_addKey(h, key, pHashData);
+	if(!pLE)
+	{
+		logError("fails to osHash_addKey for plKwy(%r).", plKey);		
+		osfree(pHashData);
+		goto EXIT;
+	}
+
+EXIT:
+	return pLE;
+}
+
+
+void* osPlHash_getUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase)
+{
+	if(!h || !plKey)
+	{
+        logError("null pointer, h=%p, plKey=%p.", h, plKey);
+        return NULL;
+    }
+
+	osStringInfo_t strKey = {plKey->p, plKey->l, isCase};
+	osListElement_t* pHashLE = osHash_lookupByKey(h, &strKey, OSHASHKEY_STR);
+    if(!pHashLE)
+    {
+		return NULL;
+	}
+
+	return pHashLE->data ? ((osHashData_t*)pHashLE->data)->pData : NULL;
+}
+
+
+osListElement_t* osPlHash_getElement(osHash_t *h, osPointerLen_t* plKey, bool isCase)
+{
+    if(!h || !plKey)
+    {
+        logError("null pointer, h=%p, plKey=%p.", h, plKey);
+        return NULL;
+    }
+
+    osStringInfo_t strKey = {plKey->p, plKey->l, isCase};
+	return osHash_lookupByKey(h, &strKey, OSHASHKEY_STR);
+}
+
 
 /*
  * len: the string len. If len=0, then the string is NULL terminated
@@ -222,7 +294,7 @@ uint32_t osHash_getBucketElementsCountGlobal(osHash_t* pHash)
  * @param data   Element data
  * @param pHashElement	return the allocated hash element if it is not NULL
  */
-osListElement_t* osHash_addElement(osHash_t *h, uint32_t key, void *data, osListElement_t* pHashElement)
+osListElement_t* osHash_addElement(osHash_t *h, uint32_t key, void *hashData, osListElement_t* pHashElement)
 {
 	if (!h)
 	{
@@ -235,11 +307,11 @@ osListElement_t* osHash_addElement(osHash_t *h, uint32_t key, void *data, osList
 	pthread_mutex_lock(&h->bucket[index].bucketMutex);
 	if(pHashElement ==  NULL)
 	{
-		pLE = osList_append(&h->bucket[index].bucketList, data);
+		pLE = osList_append(&h->bucket[index].bucketList, hashData);
 	}
 	else
 	{
-		osList_appendLE(&h->bucket[index].bucketList, pHashElement, data);
+		osList_appendLE(&h->bucket[index].bucketList, pHashElement, hashData);
 		pLE = pHashElement;
 	}
 	pthread_mutex_unlock(&h->bucket[index].bucketMutex);

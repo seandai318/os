@@ -12,7 +12,7 @@
 
 
 typedef struct osStringInfo {
-    char* str;
+    const char* str;
     size_t  len;
     bool isCase;
 } osStringInfo_t;

@@ -174,7 +174,8 @@ int osStopTimer(uint64_t timerId)
 {
 	if(timerId == 0 || pTimerChain->nodeTimeSec ==0)
 	{
-		return -1;
+		logError("timerId=%ld, pTimerChain->nodeTimeSec=%ld", timerId, pTimerChain->nodeTimeSec);
+		return 0;
 	}
 	
 	int ret = osChainStopTimerFreeTimerEvent(pTimerChain, timerId, NULL);

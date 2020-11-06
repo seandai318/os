@@ -83,4 +83,16 @@ osStatus_e osConvertPLton(const osIpPort_t* pIpPort, bool isIncludePort, struct 
 osStatus_e osConvertntoPL(struct sockaddr_in* pSockAddr, osIpPort_t* pIpPort);
 bool osIsSameSA(struct sockaddr_in* pSockAddr, struct sockaddr_in* pSockAddr1);
 
+
+static inline bool osSA_isSAInvalid(struct sockaddr_in* pSockAddr)
+{
+	if(pSockAddr)
+	{
+		return pSockAddr->sin_addr.s_addr ? false : true;
+	}
+
+	return false;
+}
+
+
 #endif

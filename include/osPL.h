@@ -67,7 +67,7 @@ uint64_t osPL_hexstr2u64(const osPointerLen_t *pl);
 double osPL_str2float(const osPointerLen_t *pl);
 //modify the digits in pl, the pl->l is not changed
 int osPL_modifyu32(osPointerLen_t* pl, uint32_t n);
-bool osPL_isset(const osPointerLen_t *pl);
+//bool osPL_isset(const osPointerLen_t *pl);
 int osPL_strcpy(const osPointerLen_t *pl, char *str, size_t size);
 //copy a content of srcPL to dstPL, the len of srcPL must be smaller than or equal to dstPL
 int osPL_plcpy(osPointerLen_t* dstPL, osPointerLen_t* srcPL);
@@ -94,6 +94,21 @@ void osVPL_setStr(osVPointerLen_t *pl, const char *str, size_t len, bool isPDyna
 void osVPL_setPL(osVPointerLen_t *pl, const osPointerLen_t* origPl, bool isPDynamic);
 void osVPL_free(osVPointerLen_t* pl);
 
+
+
+static inline bool osPL_isset(const osPointerLen_t *pl)
+{
+    return pl ? pl->p && pl->l : false;
+}
+
+
+static inline void osPL_setStr1(osPointerLen_t *pl, const char* str, size_t len)
+{
+	pl->p = str;
+	pl->l = len;
+}
+	
+
 /** Advance pl position/length by +/- N bytes */
 static inline void osPL_advance(osPointerLen_t *pl, ssize_t n)
 {
@@ -101,6 +116,17 @@ static inline void osPL_advance(osPointerLen_t *pl, ssize_t n)
 	pl->l -= n;
 }
 
+static inline int osPL_shiftcpy(osPointerLen_t *dstPL, osPointerLen_t *srcPL, size_t n)
+{
+	if(!dstPL || !srcPL || n > srcPL->l)
+	{
+		return -1;
+	}
+	dstPL->p = &srcPL->p[n];
+	dstPL->l = srcPL->l - n;
+
+	return 0;
+}
 
 
 #endif
