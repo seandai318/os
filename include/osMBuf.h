@@ -61,6 +61,8 @@ void     osMBuf_init(osMBuf_t *mb);
 void     osMBuf_reset(osMBuf_t *mb);
 void 	 osMBuf_dealloc(osMBuf_t *mb);
 int      osMBuf_realloc(osMBuf_t *mb, size_t size);
+//convert a pl to mBuf.  pl memory is seperately managed, no need to free pl memory when mBuf dealloc.
+osMBuf_t* osMBuf_setPL(osPointerLen_t *pl);
 int      osMBuf_shift(osMBuf_t *mb, ssize_t shift);
 int 	osMBuf_modifyStr(osMBuf_t *mb, char* str, size_t strLen, size_t pos);
 int      osMBuf_writeBuf(osMBuf_t *mb, const uint8_t *buf, size_t size, bool isAdvancePos);

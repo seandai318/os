@@ -82,6 +82,7 @@ int      osSA_print_addr(struct osPrintf *pf, const osSocketAddr_t *sa);
 osStatus_e osConvertPLton(const osIpPort_t* pIpPort, bool isIncludePort, struct sockaddr_in* pSockAddr);
 osStatus_e osConvertntoPL(struct sockaddr_in* pSockAddr, osIpPort_t* pIpPort);
 bool osIsSameSA(struct sockaddr_in* pSockAddr, struct sockaddr_in* pSockAddr1);
+bool osIsIpv4(osPointerLen_t* pAddr);
 
 
 static inline bool osSA_isSAInvalid(struct sockaddr_in* pSockAddr)

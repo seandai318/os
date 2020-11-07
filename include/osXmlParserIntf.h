@@ -33,6 +33,7 @@ typedef struct {
     int eDataName;          //an entry from dataName enum, different app use different enum, like sipConfig_xmlDataName_e, diaConfig_xmlDataName_e, etc. app shall not use OS_XML_INVALID_EDATA_NAME as a valid enum value
     osPointerLen_t dataName;
     osXmlDataType_e dataType;	 //for simpleType, this is set to OS_XML_DATA_TYPE_SIMPLE by user, and when callback, set to the XS type (like int, etc.)by the xmlparser
+    bool isEOT;             //app indicates to xml if it wants to receive tag EOT info, when the parser meets EOT, like </publicId>
 	osPointerLen_t nsAlias;
 	const osList_t* pNoXmlnsAttrList;	//no xmlns attributes
     union {	//controlled by dataType
@@ -43,11 +44,11 @@ typedef struct {
 } osXmlData_t;
 
 
-//user can use pnsAliasInfo, together with osXmlData_t.nsAlias, to get a data's ns info
+//user can use pnsAliasInfo, together with osXmlData_t.nsAlias, to get a data's ns info (ns alias is a prefix like xxx in "xx:aaa")
 //be noted if pXmlData is gotten from xsd due to osXmlDataCallbackInfo_t.isUseDefault = true, and xml instance
 //does not contain the element, the nsAlias is from xsd, may not match with xml's, in other word, the nsAlias
 //from xsd shall not be interpretted by pnsAliasInfo (which is gotten from xml instance).
-typedef void (*osXmlDataCallback_h)(osXmlData_t* pXmlData, void* pnsAliasInfo);
+typedef void (*osXmlDataCallback_h)(osXmlData_t* pXmlData, void* pnsAliasInfo, void* appData);
 
 
 //app provided info for osXmlDataCallback_h callback
@@ -56,8 +57,9 @@ typedef struct {
 	bool isUseDefault;		//whether app wants to use the default value for elements that have xsd minOccurs=0 and not appear in xml file
 	bool isAllElement;		//shall xml report all elements.  if true, *xmlData is irrelevent
 	osXmlDataCallback_h xmlCallback;	//if !NULL, the xml module will call this function each time a matching xml element is found, otherwise, the values will be stored in xmlData
-	osXmlData_t* xmlData;
-	int maxXmlDataSize;
+	void* appData;			//user provided data that will be passed back to the app in xmlCallback, xml module would not touch it
+	osXmlData_t* xmlData;	//user provided data structure to store the parsed xml value, only relevant when isAllElement == false
+	int maxXmlDataSize;		//used together with xmlData, only relevant when isAllElement == false
 } osXmlDataCallbackInfo_t;
 
 

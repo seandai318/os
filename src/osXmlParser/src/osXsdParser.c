@@ -55,6 +55,7 @@ static void tempPrint(osList_t* pList, int i)
 }
 
 
+//if the associated xsd does not exist, parse the xsd
 osMBuf_t* osXsd_initNS(char* fileFolder, char* xsdFileName)
 {
     osStatus_e status = OS_STATUS_OK;

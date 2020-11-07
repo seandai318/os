@@ -1146,7 +1146,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 		{
         	osXml_singleDelimitParse(&pElement->elemName, ':', &xmlData.nsAlias, &xmlData.dataName);
 		}
-		callbackInfo->xmlCallback(&xmlData, pCurXmlInfo);
+		callbackInfo->xmlCallback(&xmlData, pCurXmlInfo, callbackInfo->appData);
 
 		return status;
 	}
@@ -1219,7 +1219,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 			if(callbackInfo->xmlCallback)
 			{
 				callbackInfo->xmlData[i].pNoXmlnsAttrList = pNoXmlnsAttrList;
-				callbackInfo->xmlCallback(&callbackInfo->xmlData[i], (void*)pCurXmlInfo);
+				callbackInfo->xmlCallback(&callbackInfo->xmlData[i], (void*)pCurXmlInfo, callbackInfo->appData);
 				//assign back to the original user expected data type, since callbackInfo->xmlData[i] may be reused if the xml use the same data type multiple times
 				callbackInfo->xmlData[i].dataType = origElemDataType;
 			}

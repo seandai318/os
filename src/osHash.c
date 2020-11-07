@@ -127,6 +127,21 @@ out:
 }
 
 
+void* osHash_replaceUserData(osHash_t *h, osListElement_t* pHashLE, void* newData)
+{
+	if(!h || !pHashLE)
+	{
+		return NULL;
+	}
+
+	void* pOldUserData = ((osHashData_t*)pHashLE->data)->pData;
+	((osHashData_t*)pHashLE->data)->pData = newData;
+
+	return pOldUserData;
+}
+
+
+
 osListElement_t* osPlHash_addUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase, void* userData)
 {
 	osStatus_e status = OS_STATUS_OK;

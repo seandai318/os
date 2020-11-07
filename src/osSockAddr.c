@@ -84,3 +84,67 @@ bool osIsSameSA(struct sockaddr_in* pSockAddr, struct sockaddr_in* pSockAddr1)
 
 	return false;
 }
+
+
+bool osIsIpv4(osPointerLen_t* pAddr)
+{
+	if(!pAddr)
+	{
+		return false;
+	}
+
+	if(pAddr->l > 15 || pAddr->l < 7)
+	{
+		return false;
+	}
+
+	int pos = 0;
+	bool isFirstDigit = true;
+	bool isDotFound = false;
+	//totally 4 segement for ipv4
+	for(int i=0; i<4; i++)
+	{
+		isFirstDigit = true;
+		//check insdie each segement
+		for(int j=0; j<3; j++)
+		{
+			//first char inside a segement must be between 1-9
+			if(isFirstDigit)
+			{
+				if(pAddr->p[pos] < '1' || pAddr->p[pos] > '9')
+				{
+					return false;
+				}
+				else
+				{
+					isFirstDigit = false;
+				}
+			}
+			else
+			{
+				if(pAddr->p[pos] == '.')
+				{
+					isDotFound = true;
+					break;
+				}
+				else if(pAddr->p[pos] < '0' || pAddr->p[pos] > '9')
+				{
+					return false;
+				}
+			}
+
+			++pos;
+		}
+
+		//except for last segement, after checking xxx, check if there is '.'
+        if(!isDotFound && i < 3)
+        {
+            if(pAddr->p[pos++] != '.')
+            {
+                return false;
+            }
+        }
+	}
+			
+	return true;
+}

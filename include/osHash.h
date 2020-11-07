@@ -62,6 +62,7 @@ void* osPlHash_getUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase);
 osListElement_t* osPlHash_getElement(osHash_t *h, osPointerLen_t* plKey, bool isCase);
 
 osListElement_t* osHash_add(osHash_t *h,  osHashData_t* pHashData);
+void* osHash_replaceUserData(osHash_t *h, osListElement_t* pHashLE, void* newData);
 osListElement_t* osHash_lookupByKey(const osHash_t *h, void* key, osHashKeyType_e keyType);
 osListElement_t* osHash_addStrkey(osHash_t *h, const char* str, size_t len, bool isCase, void *data);
 osListElement_t* osHash_addKey(osHash_t *h, uint32_t key, void *data);

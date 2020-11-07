@@ -15,6 +15,7 @@
 #include "osDebug.h"
 
 
+
 struct osMBuf;
 
 
@@ -52,6 +53,7 @@ typedef struct osVPointerLen {
 #define osPL_INIT {NULL, 0}
 
 extern const osPointerLen_t osPLnull;
+
 
 void osPL_init(osPointerLen_t* pl);
 void osPL_setStr(osPointerLen_t* pl, const char* str, size_t len);
@@ -92,7 +94,8 @@ void osVPL_init(osVPointerLen_t* pl, bool isVPLDynamic);
 void osVPL_set(osVPointerLen_t* pl, void* p, size_t l, bool isPDynamic);
 void osVPL_setStr(osVPointerLen_t *pl, const char *str, size_t len, bool isPDynamic);
 void osVPL_setPL(osVPointerLen_t *pl, const osPointerLen_t* origPl, bool isPDynamic);
-void osVPL_free(osVPointerLen_t* pl);
+//if isFreeAll == false, pl.p is not freed
+void osVPL_free(osVPointerLen_t* pl, bool isFreeAll);
 
 
 

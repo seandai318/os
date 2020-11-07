@@ -78,6 +78,7 @@ void osPL_setMBuf(osPointerLen_t *pl, const struct osMBuf *mb)
 }
 
 
+	
 //simply set the p and l to a osPointerLen, no memory allocation is performed.
 void osPL_set(osPointerLen_t* pl, void* p, size_t l)
 {
@@ -889,14 +890,15 @@ void osVPL_setPL(osVPointerLen_t *pl, const osPointerLen_t* origPl, bool isPDyna
 }
 
 
-void osVPL_free(osVPointerLen_t* vpl)
+//if isFreeAll == false, pl.p is not freed
+void osVPL_free(osVPointerLen_t* vpl, bool isFreeAll)
 {
 	if(!vpl)
 	{
 		return;
 	}
 
-	if(vpl->isPDynamic)
+	if(isFreeAll && vpl->isPDynamic)
 	{
 		osfree((void*) vpl->pl.p);
 		vpl->pl.l = 0;
