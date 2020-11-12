@@ -94,5 +94,10 @@ void osHash_clear(osHash_t *h);
 uint32_t hash_valid_size(uint32_t size);
 
 
+static inline void* osHash_getUserDataByLE(osListElement_t* pHashLE)
+{
+	return pHashLE ? ((osHashData_t*)pHashLE->data)->pData : NULL;
+}
+
 
 #endif

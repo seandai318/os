@@ -889,6 +889,39 @@ void osVPL_setPL(osVPointerLen_t *pl, const osPointerLen_t* origPl, bool isPDyna
 	pl->isPDynamic = isPDynamic;
 }
 
+void osVPL_copyPL(osVPointerLen_t *dest, osVPointerLen_t *src)
+{
+	if(!dest || !src || !src->pl.l)
+	{
+		return;
+	}
+
+	if(!dest->isPDynamic && dest->pl.l > 0)
+	{
+		//the dest has a fixed pl, do not override
+		return;
+	}
+
+	//if dest already has enough pl memory, reuse it
+	if(dest->pl.l >= src->pl.l && dest->pl.p)
+	{
+		memcpy((char*)dest->pl.p, src->pl.p, src->pl.l);
+		dest->pl.l = src->pl.l;
+	}
+	else
+	{
+		if(dest->pl.p && dest->pl.l)
+		{
+			osfree((char*)dest->pl.p);
+			dest->pl.p = osmalloc(src->pl.l, NULL);
+			memcpy((char*)dest->pl.p, src->pl.p, src->pl.l);
+			dest->pl.l = src->pl.l;
+		}
+	}
+
+	dest->isPDynamic = true;
+}
+
 
 //if isFreeAll == false, pl.p is not freed
 void osVPL_free(osVPointerLen_t* vpl, bool isFreeAll)

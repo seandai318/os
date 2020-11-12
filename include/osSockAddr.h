@@ -85,7 +85,7 @@ bool osIsSameSA(struct sockaddr_in* pSockAddr, struct sockaddr_in* pSockAddr1);
 bool osIsIpv4(osPointerLen_t* pAddr);
 
 
-static inline bool osSA_isSAInvalid(struct sockaddr_in* pSockAddr)
+static inline bool osSA_isInvalid(struct sockaddr_in* pSockAddr)
 {
 	if(pSockAddr)
 	{
