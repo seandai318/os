@@ -26,12 +26,6 @@ typedef struct osPointerLen {
 } osPointerLen_t;
 
 
-typedef struct osPLinfo {
-	osPointerLen_t* pPL;
-	bool isCase;
-} osPLinfo_t;
-
-
 typedef struct osDPointerLen {
     char *p;      		// pointer to string, the string shall be deallocated after using up this data structure
     size_t l;           // length of string
@@ -87,6 +81,7 @@ const char* osPL_findStr(const osPointerLen_t *pl, const char* pattern, size_t p
 void osPL_trimLWS(osPointerLen_t* pl, bool isTrimTop, bool isTrimBottom);
 //split a string into 2, based on the first match of the splitter
 void osPL_split(osPointerLen_t* srcPL, char splitter, osPointerLen_t* sub1, osPointerLen_t* sub2);
+void osPL_compact(osPointerLen_t* pl);
 
 void osDPL_dealloc(osDPointerLen_t *pl);
 
@@ -94,7 +89,8 @@ void osVPL_init(osVPointerLen_t* pl, bool isVPLDynamic);
 void osVPL_set(osVPointerLen_t* pl, void* p, size_t l, bool isPDynamic);
 void osVPL_setStr(osVPointerLen_t *pl, const char *str, size_t len, bool isPDynamic);
 void osVPL_setPL(osVPointerLen_t *pl, const osPointerLen_t* origPl, bool isPDynamic);
-void osVPL_copyPL(osVPointerLen_t *dest, osVPointerLen_t *src);
+void osVPL_copyPL(osVPointerLen_t *dest, osPointerLen_t *src);
+void osVPL_copyVPL(osVPointerLen_t *dest, osVPointerLen_t *src);
 //if isFreeAll == false, pl.p is not freed
 void osVPL_free(osVPointerLen_t* pl, bool isFreeAll);
 

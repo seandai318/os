@@ -889,7 +889,7 @@ void osVPL_setPL(osVPointerLen_t *pl, const osPointerLen_t* origPl, bool isPDyna
 	pl->isPDynamic = isPDynamic;
 }
 
-void osVPL_copyPL(osVPointerLen_t *dest, osVPointerLen_t *src)
+void osVPL_copyVPL(osVPointerLen_t *dest, osVPointerLen_t *src)
 {
 	if(!dest || !src || !src->pl.l)
 	{
@@ -910,16 +910,44 @@ void osVPL_copyPL(osVPointerLen_t *dest, osVPointerLen_t *src)
 	}
 	else
 	{
-		if(dest->pl.p && dest->pl.l)
-		{
-			osfree((char*)dest->pl.p);
-			dest->pl.p = osmalloc(src->pl.l, NULL);
-			memcpy((char*)dest->pl.p, src->pl.p, src->pl.l);
-			dest->pl.l = src->pl.l;
-		}
+		osfree((char*)dest->pl.p);
+		dest->pl.p = osmalloc(src->pl.l, NULL);
+		memcpy((char*)dest->pl.p, src->pl.p, src->pl.l);
+		dest->pl.l = src->pl.l;
 	}
 
 	dest->isPDynamic = true;
+}
+
+
+void osVPL_copyPL(osVPointerLen_t *dest, osPointerLen_t *src)
+{
+    if(!dest || !src || !src->p || !src->l)
+    {
+        return;
+    }
+
+    if(!dest->isPDynamic && dest->pl.l > 0)
+    {
+        //the dest has a fixed pl, do not override
+        return;
+    }
+
+    //if dest already has enough pl memory, reuse it
+    if(dest->pl.l >= src->l && dest->pl.p)
+    {
+        memcpy((char*)dest->pl.p, src->p, src->l);
+        dest->pl.l = src->l;
+    }
+    else
+    {
+        osfree((char*)dest->pl.p);
+        dest->pl.p = osmalloc(src->l, NULL);
+        memcpy((char*)dest->pl.p, src->p, src->l);
+        dest->pl.l = src->l;
+    }
+
+    dest->isPDynamic = true;
 }
 
 
@@ -967,4 +995,38 @@ void osPL_split(osPointerLen_t* srcPL, char splitter, osPointerLen_t* sub1, osPo
 			break;
 		}
 	}
+}
+
+
+//remove preceeding empty space and trailing empry space
+void osPL_compact(osPointerLen_t* pl)
+{
+	if(!pl || pl->l == 0 || !pl->p)
+	{
+		return;
+	}
+
+	size_t startL = 0;
+	for(size_t i=0; i<pl->l; i++)
+	{
+		if(pl->p[i] != ' ')
+		{
+			startL = i;
+			break;
+		}
+	}
+
+	size_t stopL = pl->l;
+	for(size_t i=pl->l-1; i>=startL; i--)
+	{
+		if(pl->p[i] != ' ')
+		{
+			pl->p = &pl->p[startL];
+			pl->l = i - startL + 1;
+
+			return;
+		}
+	}
+
+	pl->l = 0;
 }

@@ -11,12 +11,6 @@
 #include <stdarg.h>
 
 
-typedef struct osStringInfo {
-    const char* str;
-    size_t  len;
-    bool isCase;
-} osStringInfo_t;
-
 
 /* Character functions */
 uint8_t osStr_chHex2Bin(char ch);

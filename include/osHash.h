@@ -35,12 +35,24 @@ typedef enum {
 } osHashKeyType_e;
 
 
+typedef struct osStringInfo {
+	osPointerLen_t pl;
+    bool isCase;
+} osStrKeyInfo_t;
+
+
+typedef struct osPLinfo {
+    osPointerLen_t* pPL;
+    bool isCase;
+} osPLKeyinfo_t;
+
+
 typedef struct osHashData {
     osHashKeyType_e hashKeyType;
     union {
-        osStringInfo_t hashKeyStr;
+        osStrKeyInfo_t hashKeyStr;
         uint32_t hashKeyInt;	//this will be used directly as a hash key
-		osPLinfo_t hashKeyPL;
+		osPLKeyinfo_t hashKeyPL;
     };
     void* pData;
 } osHashData_t;
@@ -89,6 +101,8 @@ uint32_t osHash_getBucketSize(const osHash_t *h);
 uint32_t osHash_getBucketElementsCount(osListElement_t* pLE);
 uint32_t osHash_getBucketElementsCountGlobal(osHash_t* pHash);
 void* osHash_getData(osListElement_t* pHashLE);
+//isFreeP: other than free pl, also free pl->p
+void osHash_freeKey(osListElement_t* pHashElement, bool isFreeP);
 void osHash_delete(osHash_t *h);
 void osHash_clear(osHash_t *h);
 uint32_t hash_valid_size(uint32_t size);

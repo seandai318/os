@@ -109,7 +109,7 @@ osListElement_t* osHash_add(osHash_t *h, osHashData_t* pHashData)
     switch (pHashData->hashKeyType)
     {
         case OSHASHKEY_STR:
-            pLE = osHash_addStrkey(h, pHashData->hashKeyStr.str, pHashData->hashKeyStr.len, pHashData->hashKeyStr.isCase, pHashData);
+            pLE = osHash_addStrkey(h, pHashData->hashKeyStr.pl.p, pHashData->hashKeyStr.pl.l, pHashData->hashKeyStr.isCase, pHashData);
             break;
         case OSHASHKEY_INT:
             pLE = osHash_addKey(h, pHashData->hashKeyInt, pHashData);
@@ -165,8 +165,7 @@ osListElement_t* osPlHash_addUserData(osHash_t *h, osPointerLen_t* plKey, bool i
     uint32_t key = osHash_getKeyPL(plKey, isCase);
 
     pHashData->hashKeyType = OSHASHKEY_STR;
-	pHashData->hashKeyStr.str = plKey->p;
-	pHashData->hashKeyStr.len = plKey->l;
+	pHashData->hashKeyStr.pl = *plKey;
 	pHashData->hashKeyStr.isCase = isCase;
     pHashData->pData = userData;
 
@@ -191,7 +190,7 @@ void* osPlHash_getUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase)
         return NULL;
     }
 
-	osStringInfo_t strKey = {plKey->p, plKey->l, isCase};
+	osStrKeyInfo_t strKey = {*plKey, isCase};
 	osListElement_t* pHashLE = osHash_lookupByKey(h, &strKey, OSHASHKEY_STR);
     if(!pHashLE)
     {
@@ -210,7 +209,7 @@ osListElement_t* osPlHash_getElement(osHash_t *h, osPointerLen_t* plKey, bool is
         return NULL;
     }
 
-    osStringInfo_t strKey = {plKey->p, plKey->l, isCase};
+    osStrKeyInfo_t strKey = {*plKey, isCase};
 	return osHash_lookupByKey(h, &strKey, OSHASHKEY_STR);
 }
 
@@ -381,6 +380,33 @@ void osHash_deleteNode(osListElement_t* pHashElement, osHashDelNodeType_e delTyp
 }
 
 
+//isFreeP: other than free pl, also free pl->p
+void osHash_freeKey(osListElement_t* pHashElement, bool isFreeP)
+{
+	switch(((osHashData_t*)pHashElement->data)->hashKeyType)
+	{
+		case OSHASHKEY_STR:
+			if(isFreeP)
+			{
+				osfree((char*)((osHashData_t*)pHashElement->data)->hashKeyStr.pl.p);
+			}
+			break;
+		case OSHASHKEY_PL:
+			if(isFreeP)
+			{
+				osfree((char*)((osHashData_t*)pHashElement->data)->hashKeyPL.pPL->p);
+			}
+			osfree(((osHashData_t*)pHashElement->data)->hashKeyPL.pPL);
+			break;
+		case OSHASHKEY_INT:
+		default:
+			break;
+	}
+
+	return;
+}
+
+	
 void osHash_deleteNodeByKey1(const osHash_t *h, uint32_t key, osListApply_h ah, void *arg, osHashDelNodeType_e delType)
 {
 	osListElement_t* pHE = osHash_lookup1(h, key, ah, arg);
@@ -401,7 +427,7 @@ void osHash_deleteNodeByKey(const osHash_t *h, osHashData_t* pHashData, osHashDe
     switch (pHashData->hashKeyType)
     {
         case OSHASHKEY_STR:
-            hashKey = osHash_getKeyStr(pHashData->hashKeyStr.str, pHashData->hashKeyStr.len, pHashData->hashKeyStr.isCase);
+            hashKey = osHash_getKeyStr(pHashData->hashKeyStr.pl.p, pHashData->hashKeyStr.pl.l, pHashData->hashKeyStr.isCase);
             break;
         case OSHASHKEY_INT:
             hashKey = pHashData->hashKeyInt;
@@ -479,7 +505,7 @@ osListElement_t* osHash_lookup(const osHash_t *h, osHashData_t* pHashData)
 	switch (pHashData->hashKeyType)
 	{
 		case OSHASHKEY_STR:
-			hashKey = osHash_getKeyStr(pHashData->hashKeyStr.str, pHashData->hashKeyStr.len, pHashData->hashKeyStr.isCase);
+			hashKey = osHash_getKeyStr(pHashData->hashKeyStr.pl.p, pHashData->hashKeyStr.pl.l, pHashData->hashKeyStr.isCase);
 			break;
 		case OSHASHKEY_INT:
 			hashKey = pHashData->hashKeyInt;
@@ -511,15 +537,15 @@ osListElement_t* osHash_lookupByKey(const osHash_t *h, void* key, osHashKeyType_
 	switch(keyType)
 	{
 		case OSHASHKEY_STR:
-			hashData.hashKeyStr = *(osStringInfo_t*)key;
-            hashKey = osHash_getKeyStr(hashData.hashKeyStr.str, hashData.hashKeyStr.len, hashData.hashKeyStr.isCase);
+			hashData.hashKeyStr = *(osStrKeyInfo_t*)key;
+            hashKey = osHash_getKeyStr(hashData.hashKeyStr.pl.p, hashData.hashKeyStr.pl.l, hashData.hashKeyStr.isCase);
 			break;
 		case OSHASHKEY_INT:
 			hashData.hashKeyInt = *(uint32_t*)key;
 			hashKey = hashData.hashKeyInt;
 			break;
 		case OSHASHKEY_PL:
-			hashData.hashKeyPL = *(osPLinfo_t*)key;
+			hashData.hashKeyPL = *(osPLKeyinfo_t*)key;
             hashKey = osHash_getKeyPL(hashData.hashKeyPL.pPL, hashData.hashKeyPL.isCase);
 			break;
 		default:
@@ -766,17 +792,17 @@ static bool osHashCompare(osListElement_t *le, void *data)
     switch (pData->hashKeyType)
     {
         case OSHASHKEY_STR:
-            if(pData->hashKeyStr.len != pHashData->hashKeyStr.len || pData->hashKeyStr.isCase != pHashData->hashKeyStr.isCase)
+            if(pData->hashKeyStr.pl.l != pHashData->hashKeyStr.pl.l || pData->hashKeyStr.isCase != pHashData->hashKeyStr.isCase)
             {
                 return false;
             }
             if(pData->hashKeyStr.isCase)
             {
-                return !strncmp(pData->hashKeyStr.str, pHashData->hashKeyStr.str, pData->hashKeyStr.len);
+                return !strncmp(pData->hashKeyStr.pl.p, pHashData->hashKeyStr.pl.p, pData->hashKeyStr.pl.l);
             }
             else
             {
-                return !strncasecmp(pData->hashKeyStr.str, pHashData->hashKeyStr.str, pData->hashKeyStr.len);
+                return !strncasecmp(pData->hashKeyStr.pl.p, pHashData->hashKeyStr.pl.p, pData->hashKeyStr.pl.l);
             }
         break;
         case OSHASHKEY_INT:
