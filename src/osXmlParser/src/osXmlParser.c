@@ -73,6 +73,7 @@ static void osXml_updateNsInfo(osXml_nsInfo_t* pNewNsInfo, osXml_nsInfo_t* pXsdP
 static osListElement_t* osXml_isAliasMatch(osList_t* nsAliasList, osPointerLen_t* pnsAlias);
 static void osXmlNsInfo_cleanup(void* data);
 
+static osStatus_e osXml_parseInternal(osMBuf_t* pBuf, osPointerLen_t* xsdName, osXmlDataCallbackInfo_t* callbackInfo);
 static osStatus_e osXml_parseRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
 static osStatus_e osXml_parseSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
 static osStatus_e osXml_parseEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
@@ -81,6 +82,13 @@ static osStatus_e osXml_parseAnyRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemIn
 static osStatus_e osXml_parseAnyElemSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
 static osStatus_e osXml_parseAnyElemDOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
 static osStatus_e osXml_parseAnyElemEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
+
+
+
+osStatus_e osXml_parse(osMBuf_t* pBuf, osXmlDataCallbackInfo_t* callbackInfo)
+{
+	return osXml_parseInternal(pBuf, NULL, callbackInfo);
+}
 
 	
 /* parse a xml input based on xsd.  Expect the top element is also the xsd root element, i.e., the xml implements the whole xsd  
@@ -132,7 +140,7 @@ static osStatus_e osXml_parseAnyElemEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInf
  * isUseDefault: IN, when true, the default value from xsd will be used if a complex type's disposition=sequence/all, =false, default value from xsd will not be checked
  * callbackInfo: OUT, callback data, the xml leaf value will be set there
  */
-static osStatus_e osXml_parse(osMBuf_t* pBuf, osPointerLen_t* xsdName, osXmlDataCallbackInfo_t* callbackInfo)
+static osStatus_e osXml_parseInternal(osMBuf_t* pBuf, osPointerLen_t* xsdName, osXmlDataCallbackInfo_t* callbackInfo)
 {
     osStatus_e status = OS_STATUS_OK;
     osXmlTagInfo_t* pElemInfo = NULL;
@@ -929,7 +937,7 @@ bool osXml_isValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osPointerLen_t* xsdName
 	osXsdSchema_t* pSchema = pNS->schemaList.head->data;
     if(osXml_parse(pXmlBuf, xsdName, callbackInfo) != OS_STATUS_OK)
 	{
-		logError("fails to osXml_parse(), xmlBuf pos=%ld.", pXmlBuf->pos);
+		logError("fails to osXml_parseInternal(), xmlBuf pos=%ld.", pXmlBuf->pos);
 		return false;
 	}
 
@@ -1034,7 +1042,7 @@ osStatus_e osXml_getElemValue(osPointerLen_t* xsdName, osMBuf_t* xsdMBuf, osMBuf
 
     logInfo("start xml parse.");
 //    osXsdSchema_t* pSchema = pNS->schemaList.head->data;
-    status = osXml_parse(xmlBuf, xsdName, callbackInfo);
+    status = osXml_parseInternal(xmlBuf, xsdName, callbackInfo);
     if(status != OS_STATUS_OK)
     {
         logError("xml parse failed.");
@@ -1234,7 +1242,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 
 /* get a xsd element(pXsdPointer)'s complex type info, include the order of the current xml element(pTag) in the complex type
  * pTag:               IN, the current element name in xml that is under parsing
- * pXsdPointer:        IN, the pTag's parent element in xsd.  Take the xml and xsd example in function osXml_parse() as an example, when parsing pTag="tLayer2-2", 
+ * pXsdPointer:        IN, the pTag's parent element in xsd.  Take the xml and xsd example in function osXml_parseInternal() as an example, when parsing pTag="tLayer2-2", 
  *                     the pXsdPointer="layer2"
  * pParentXsdDispType: OUT, the disposition type of pXsdPointer, like all, sequence, etc.
  * listIdx:            OUT, the sequenence order of pTag in the complex type definition of pXsdPointer
