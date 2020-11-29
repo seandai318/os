@@ -416,7 +416,7 @@ void* osList_deletePtrElement(osList_t* pList, void* arg)
 }
 
 
-void osList_deleteElementAll(osListElement_t* pLE)
+void osList_deleteElementAll(osListElement_t* pLE, bool isFreeData)
 {
 	if(!pLE)
 	{
@@ -424,7 +424,10 @@ void osList_deleteElementAll(osListElement_t* pLE)
 	}
 
 	osList_unlinkElement(pLE);
-    osfree(pLE->data);
+    if(isFreeData)
+	{	
+		osfree(pLE->data);
+	}
     osfree(pLE);
 }
 

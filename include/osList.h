@@ -87,8 +87,8 @@ void osList_unlinkElement(osListElement_t *le);
 void* osList_deleteElement(osList_t* pList, osListApply_h applyHandler, void *arg);
 //each element contains a data structure pointer, the input arg is the address of the data structure, i.e., pointer
 void* osList_deletePtrElement(osList_t* pList, void*arg);
-//delete a element by element address, the data pointed by the element is also deleted.
-void osList_deleteElementAll(osListElement_t* pLE);
+//delete a element by element address, the data pointed by the element is also deleted if isFreeData=true.
+void osList_deleteElementAll(osListElement_t* pLE, bool isFreeData);
 void osList_sort(osList_t *list, osListSortHandler sortHandler, void *arg);
 osListElement_t *osList_lookup(const osList_t *list, bool fwd, osListApply_h applyHandler, void *arg);
 osListElement_t* osList_getHead(const osList_t *list);

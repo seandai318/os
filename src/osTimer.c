@@ -179,7 +179,7 @@ int osStopTimer(uint64_t timerId)
 	}
 	
 	int ret = osChainStopTimerFreeTimerEvent(pTimerChain, timerId, NULL);
-	mlogInfo(LM_TIMER, "stop timerId=0x%lx, %s", timerId, ret == 0 ? "successful" : "failed");
+	logInfo("stop timerId=0x%lx, %s", timerId, ret == 0 ? "successful" : "failed");
     osTimerListSubChainNodes(NULL);
 
 	return 0;
@@ -194,7 +194,7 @@ int osvStopTimer(uint64_t timerId, char* info)
     }
 
     int ret = osChainStopTimerFreeTimerEvent(pTimerChain, timerId, NULL);
-    mlogInfo(LM_TIMER, "stop timerId=0x%lx, %s, info: %s", timerId, ret == 0 ? "successful" : "failed", info);
+    logInfo("stop timerId=0x%lx, %s, info: %s", timerId, ret == 0 ? "successful" : "failed", info);
     osTimerListSubChainNodes(NULL);
 
     return ret;
@@ -277,7 +277,7 @@ static uint64_t osStartTimerInternal(time_t msec, timeoutCallBackFunc_t callback
     mdebug(LM_TIMER, "diffMSec=%ld, pTimerChain=%p, new timerNode=%p", diffMsec, pTimerChain, pNewNode);
 	if(!isTick)
 	{
-    	mlogInfo(LM_TIMER, "start a timer, timeout=%ld, timerId=0x%lx, pTimerInfo=%p", msec, timerId, pTimerInfo);
+    	logInfo("start a timer, timeout=%ld msec, timerId=0x%lx, pTimerInfo=%p", msec, timerId, pTimerInfo);
 	}
     osTimerListSubChainNodes(NULL);
 

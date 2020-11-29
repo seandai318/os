@@ -1419,7 +1419,7 @@ static void osXml_updateNsInfo(osXml_nsInfo_t* pNewNsInfo, osXml_nsInfo_t* pXsdP
 		osListElement_t* pMatchLE = osXml_isAliasMatch(&pXsdPointerXmlnsInfo->nsAliasList, &((osXsd_nsAliasInfo_t*)pLE->data)->nsAlias);
 		if(pMatchLE)
 		{
-			osList_deleteElementAll(pMatchLE);
+			osList_deleteElementAll(pMatchLE, true);
 		}
 
 		pLE = pLE->next;
