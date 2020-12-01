@@ -10,6 +10,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "osMBuf.h"
 #include "osPL.h"
@@ -85,9 +86,30 @@ static osStatus_e osXml_parseAnyElemEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInf
 
 
 
-osStatus_e osXml_parse(osMBuf_t* pBuf, osXmlDataCallbackInfo_t* callbackInfo)
+/* pXmlBuf: IN, contains xml contents
+ * pXsdBuf: IN, contains xsd contents, if NULL, thexsd has been parsed before this function call
+ * xsdName: IN, the name of xsd file, like 3gppSsa.xsd, etc.  If the associated xsd has been parsed before, must matches with the xsd name used in the earlier xsd parse input
+ * callbackInfo: IN, instruction to perform xml aprse
+ */
+osStatus_e osXml_parse(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osPointerLen_t* xsdName, osXmlDataCallbackInfo_t* callbackInfo)
 {
-	return osXml_parseInternal(pBuf, NULL, callbackInfo);
+	if(!pXmlBuf || !xsdName)
+	{
+		logError("null pointer, pXmlBuf=%p, xsdName=%p.", pXmlBuf, xsdName);
+		return OS_ERROR_NULL_POINTER;
+	}
+
+	if(pXsdBuf)
+	{
+		osXsdNamespace_t* pNS = osXsd_parse(pXsdBuf, xsdName);
+    	if(!pNS)
+    	{
+        	logError("fails to osXsd_parse for xsdMBuf, pos=%ld.", pXsdBuf->pos);
+        	return OS_ERROR_INVALID_VALUE;
+    	}
+	}
+	
+	return osXml_parseInternal(pXmlBuf, xsdName, callbackInfo);
 }
 
 	
@@ -358,7 +380,7 @@ static osStatus_e osXml_parseRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo,
     if(pStateInfo->callbackInfo->isAllowNoLeaf && (!osXml_isXsdElemSimpleType(pXsdPointer->pCurElem) || pXsdPointer->pCurElem->isElementAny))
     {
     	//The data sanity check is performed by callback()
-        status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, &noXmlnsAttrList, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
+        status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, &noXmlnsAttrList, false, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
     }
 
     osList_append(&pStateInfo->xsdElemPointerList, pXsdPointer);
@@ -495,7 +517,7 @@ static osStatus_e osXml_parseSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
     	if(pStateInfo->callbackInfo->isAllowNoLeaf)
     	{
         	//The data sanity check is performed by callback()
-        	status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, &pElemInfo->attrNVList, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
+        	status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, &pElemInfo->attrNVList, false, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
     	}
 	}
 
@@ -638,8 +660,13 @@ static osStatus_e osXml_parseEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
     if(osXml_isXsdElemSimpleType(pCurXsdElem))
     {
 		osPointerLen_t value = {&pBuf->buf[pStateInfo->tagPosInfo.openTagEndPos], pStateInfo->tagPosInfo.tagStartPos - pStateInfo->tagPosInfo.openTagEndPos}; 
-        status = osXml_xmlCallback(pCurXsdElem, &value, NULL, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
+        status = osXml_xmlCallback(pCurXsdElem, &value, NULL, true, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
     }
+	else if(pStateInfo->callbackInfo->isAllowNoLeaf)
+	{
+		//The data sanity check is performed by callback()
+		status = osXml_xmlCallback(pCurXsdElem, NULL, NULL, true, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
+	}
 
     if(status != OS_STATUS_OK)
     {
@@ -680,7 +707,7 @@ static osStatus_e osXml_parseDOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
 
     pStateInfo->pParentXsdPointer->assignedChildIdx[listIdx] = true;
 
-    status = osXml_xmlCallback(pCurElem, NULL, &pElemInfo->attrNVList, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
+    status = osXml_xmlCallback(pCurElem, NULL, &pElemInfo->attrNVList, false, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
 
 EXIT:
     return status;
@@ -777,7 +804,7 @@ static osStatus_e osXml_parseAnyRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemIn
     if(pStateInfo->callbackInfo->isAllowNoLeaf)
     {
         //The data sanity check is performed by callback()
-        status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, &noXmlnsAttrList, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
+        status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, &noXmlnsAttrList, false, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
     }
 
     osList_append(&pStateInfo->xsdElemPointerList, pXsdPointer);
@@ -825,7 +852,7 @@ static osStatus_e osXml_parseAnyElemSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInf
     if(pStateInfo->callbackInfo->isAllowNoLeaf)
     {
         //The data sanity check is performed by callback()
-        status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, &pElemInfo->attrNVList, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
+        status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, &pElemInfo->attrNVList, false, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
     }
 
     osList_append(&pStateInfo->xsdElemPointerList, pXsdPointer);
@@ -850,7 +877,7 @@ static osStatus_e osXml_parseAnyElemDOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInf
 	osXsdElement_t* pCurElem = osXsd_createAnyElem(&pElemInfo->tag, false);
 	pCurElem->anyElem.xmlAnyElem.isLeaf = false;
 
-    status = osXml_xmlCallback(pCurElem, NULL, &pElemInfo->attrNVList, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
+    status = osXml_xmlCallback(pCurElem, NULL, &pElemInfo->attrNVList, false, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
 
 EXIT:
     return status;
@@ -885,7 +912,12 @@ static osStatus_e osXml_parseAnyElemEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInf
     if(pCurXsdElem->anyElem.xmlAnyElem.isLeaf)
     {
         osPointerLen_t value = {&pBuf->buf[pStateInfo->tagPosInfo.openTagEndPos], pStateInfo->tagPosInfo.tagStartPos - pStateInfo->tagPosInfo.openTagEndPos};
-        status = osXml_xmlCallback(pCurXsdElem, &value, NULL, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
+        status = osXml_xmlCallback(pCurXsdElem, &value, NULL, true, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
+    }
+    else if(pStateInfo->callbackInfo->isAllowNoLeaf)
+    {
+        //The data sanity check is performed by callback()
+        status = osXml_xmlCallback(pCurXsdElem, NULL, NULL, true, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
     }
 
     //for any element, it is not part of xsd, and was dynamically allocated, need to free when it is not needed any more
@@ -935,7 +967,7 @@ bool osXml_isValid(osMBuf_t* pXmlBuf, osMBuf_t* pXsdBuf, osPointerLen_t* xsdName
 
 	//assume one schema
 	osXsdSchema_t* pSchema = pNS->schemaList.head->data;
-    if(osXml_parse(pXmlBuf, xsdName, callbackInfo) != OS_STATUS_OK)
+    if(osXml_parseInternal(pXmlBuf, xsdName, callbackInfo) != OS_STATUS_OK)
 	{
 		logError("fails to osXml_parseInternal(), xmlBuf pos=%ld.", pXmlBuf->pos);
 		return false;
@@ -1070,7 +1102,7 @@ EXIT:
  * a default value in xsd only when in xml instance, <element /> is used.  So it shall not be a problem to restrict the ns alias use
  * for isUseDefault=true.  Just need to be careful what xsd is used and to include ns alias in osXmlData_t.dataname for isUseDefault=true.
  */
-osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, const osList_t* pNoXmlnsAttrList, osXmlDataCallbackInfo_t* callbackInfo, void* pCurXmlInfo)
+osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, const osList_t* pNoXmlnsAttrList, bool isEOT, osXmlDataCallbackInfo_t* callbackInfo, void* pCurXmlInfo)
 {
 	osStatus_e status = OS_STATUS_OK;
 	bool isLeaf = true;
@@ -1139,10 +1171,14 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
                     return OS_ERROR_INVALID_VALUE;
                     break;
             }
+
+			//leaf is always EOT
+			xmlData.isEOT = true;
 		}
 		else
 		{
 			xmlData.dataType = pElement->dataType;
+			xmlData.isEOT = isEOT;
 		}
 
 		if(callbackInfo->isUseDefault)
@@ -1154,6 +1190,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 		{
         	osXml_singleDelimitParse(&pElement->elemName, ':', &xmlData.nsAlias, &xmlData.dataName);
 		}
+
 		callbackInfo->xmlCallback(&xmlData, pCurXmlInfo, callbackInfo->appData);
 
 		return status;
@@ -1220,6 +1257,18 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
                     	return OS_ERROR_INVALID_VALUE;
                     	break;
             	}
+
+	            //leaf is always EOT
+    	        callbackInfo->xmlData[i].isEOT = true;
+			}
+			else
+			{
+				if(!callbackInfo->xmlData[i].isEOT && isEOT)
+				{
+					return OS_STATUS_OK;
+				}
+
+				callbackInfo->xmlData[i].isEOT = isEOT;
 			}
 
 			callbackInfo->xmlData[i].nsAlias = nsAlias;

@@ -9,5 +9,6 @@
 #define OS_HASH_KEY_MAX_LEN	200
 #define SYS_MAX_EPOLL_WAIT_EVENTS	10
 
+#define OS_MAX_FILE_NAME_SIZE	160
 
 #endif
