@@ -130,7 +130,7 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf, osPointerLen_t* pXsdName)
 	}
 
 	//for now assume the same schema is only inputed/parsed one time.  In the future, for safety, add a xsd name check to prevent the same schema been parsed multiple times
-	pNS = osXsd_getNS(&gXsdNSList, &pSchema->schemaInfo.targetNS, true);
+	pNS = osXsd_getNS(&gXsdNSList, (osPointerLen_t*)&pSchema->schemaInfo.targetNS, true);
 	if(!pNS)
 	{
         logError("fails to osXsd_getNS for a pSchema(%r).", &pSchema->schemaInfo.targetNS);
@@ -139,13 +139,14 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf, osPointerLen_t* pXsdName)
         goto EXIT;
     }
 
-    pNS->pTargetNS = &pSchema->schemaInfo.targetNS;
+    pNS->pTargetNS = (osPointerLen_t*)&pSchema->schemaInfo.targetNS;
     if(pSchema->schemaInfo.targetNS.l == 0)
     {
         pNS->pTargetNS = NULL;
 
-		//fill the schemaInfo.targetNS with the xsd name
-		pSchema->schemaInfo.targetNS = *pXsdName;
+		//fill the schemaInfo.targetNS with the xsd name, make sure to copy the pl->p
+		osDPL_dup(&pSchema->schemaInfo.targetNS, pXsdName);
+	//	pSchema->schemaInfo.targetNS = *pXsdName;
     }
 
     if(!osList_append(&pNS->schemaList, pSchema))
@@ -157,6 +158,9 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf, osPointerLen_t* pXsdName)
     }
 
 	osList_append(&gXsdNSList, pNS);
+
+	//intentionally to put last to make sure in error cases above, pXmlBuf will not be freed twice or not freed
+	pSchema->pXsdBuf = osmemref(pXmlBuf);
 
 EXIT:
 	if(status != OS_STATUS_OK)
@@ -652,7 +656,9 @@ osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, osXsd_schemaInfo_t* pSchemaIn
 		}
 		else if(osPL_strplcmp("targetNamespace", 15, &((osXmlNameValue_t*)pLE->data)->name, true) == 0)
 		{
-			pSchemaInfo->targetNS = ((osXmlNameValue_t*)pLE->data)->value;
+			//also copy pl->p
+			osDPL_dup(&pSchemaInfo->targetNS, &((osXmlNameValue_t*)pLE->data)->value);
+			//pSchemaInfo->targetNS = ((osXmlNameValue_t*)pLE->data)->value;
 		}
 
 		pLE = pLE->next;
@@ -1363,7 +1369,7 @@ bool osXsd_isExistSchema(osPointerLen_t* pTargetNS)
         osListElement_t* pLE1 = pNS->schemaList.head;
         while(pLE1)
         {
-			if(osPL_cmp(&((osXsdSchema_t*)pLE1->data)->schemaInfo.targetNS, pTargetNS) == 0)
+			if(osPL_cmp((osPointerLen_t*)&((osXsdSchema_t*)pLE1->data)->schemaInfo.targetNS, pTargetNS) == 0)
 			{
 				isExistNS = true;
 				break;
@@ -1459,7 +1465,7 @@ osXsdElement_t* osXsd_getNSRootElem(osPointerLen_t* pTargetNS, bool isEmptyTarge
 			//for xsd name, find the schema that matching the xsd name
 			if(isEmptyTargetNS)
 			{
-				if(osPL_cmp(&((osXsdSchema_t*)pLE1->data)->schemaInfo.targetNS, pTargetNS) == 0)
+				if(osPL_cmp((osPointerLen_t*)&((osXsdSchema_t*)pLE1->data)->schemaInfo.targetNS, pTargetNS) == 0)
 				{
 					pElem = osXsd_getElementFromList(&((osXsdSchema_t*)pLE1->data)->gElementList, pElemTag);
 					break;
@@ -1544,6 +1550,8 @@ void osXsdSchema_cleanup(void* data)
 	osList_delete(&pSchema->gComplexList);
 	osList_delete(&pSchema->gSimpleList);
 	osList_delete(&pSchema->schemaInfo.nsAliasList);
+	osDPL_dealloc((osDPointerLen_t*)&pSchema->schemaInfo.targetNS);
+	osfree(pSchema->pXsdBuf);
 }
 
 

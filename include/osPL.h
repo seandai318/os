@@ -19,6 +19,18 @@
 struct osMBuf;
 
 
+/* Note:
+ * there are three similar pl defined: osPointerLen_t, osDPointerLen_t, and osVPointerLen_t.  The following is the suggested usage.
+ * osPointerLen_t:  purely referencing a memory, when a file/module is done using this data structure, no need to free it
+ * osDPointerLen_t: This can be used when a file/module receives a osPointerLen_t, but does not know how the receiving osPointerLen_t is
+ *                  created by the sender (local variable? referring to other bulk memory that may be freed any time? etc.).  In this case,
+ *                  if the receiving file/module wants to keep the data for a while, it can use this data structure.  it shall dynamically 
+ *                  allocate pl->p, and free it when the data structure is done.
+ * osVPointerLen_t: this data structure includes information like what parts are dynamically allocated.  This data structure can be used to pass a 
+ *                  osPointerLen_t type mata from one module to another.  The receiving file/module knows if it needs to free the data structure 
+ *                  when it is done.  The sending part would not free any memory.
+ */
+
 /** Defines a pointer-length string type */
 typedef struct osPointerLen {
 	const char *p;  	// pointer to string 

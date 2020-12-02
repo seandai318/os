@@ -124,7 +124,7 @@ typedef struct {
 
 
 typedef struct {
-    osPointerLen_t targetNS;	//target ns or a xsd name (for no target ns schema), when xsd nme is used, ns.pTargetNS = NULL
+    osDPointerLen_t targetNS;	//target ns or a xsd name (for no target ns schema), when xsd nme is used, ns.pTargetNS = NULL. useosDPointerLen_t because the pl->p is dynamically allocated to take care the case that user passed in xsdName may be a local variable.
     osList_t nsAliasList;		//each entry contains osXsd_nsAliasInfo_t
     osPointerLen_t defaultNS;
 	osPointerLen_t xsAlias;		//for now xsAlias can either be empty or a spec ific alias, can not be both
@@ -160,6 +160,7 @@ typedef struct {
     osList_t gElementList;      //a list of global element for a schema of a namespace, each entry contains osXsdElement_t
     osList_t gComplexList;      //a list of global complexType for a schema of a namespace, each entry contains osXmlComplexType_t
     osList_t gSimpleList;       //a list of global simpleType for a schema of a namespace, each entry contains osXmlSimpleType_t
+	osMBuf_t* pXsdBuf;			//keep a reference to xsdBuf so that it can be freed when needed
 } osXsdSchema_t;
 
 
