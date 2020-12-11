@@ -1090,26 +1090,3 @@ ssize_t osMbuf_findValue(osMBuf_t* pBuf, char tag1, char tag2, bool isExclSpace,
 
 	return pos;
 }
-
-
-//convert a pl to mBuf.  pl memory is seperately managed, no need to free pl memory when mBuf dealloc.
-osMBuf_t* osMBuf_setPL(osPointerLen_t *pl)
-{
-    if(!pl)
-    {
-        return NULL;
-    }
-
-    //when free, no need to free the pl memory
-    osMBuf_t* mb = oszalloc(sizeof(osMBuf_t), NULL);
-    if (!mb)
-    {
-        return NULL;
-    }
-
-    mb->buf = (uint8_t*)pl->p;
-    mb->size = pl->l;
-
-    return mb;
-}
-

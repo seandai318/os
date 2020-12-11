@@ -53,6 +53,10 @@ typedef struct {
 } osIpPort_t;
 
 
+
+#define osIpPort_STATIC_INIT(osIpPort)   {{{osIpPort.ipMem, 0}}}
+
+
 void     osSA_init(osSocketAddr_t *sa, int af);
 int      osSA_set(osSocketAddr_t *sa, const osPointerLen_t *addr, uint16_t port);
 int      osSA_setStr(osSocketAddr_t *sa, const char *addr, uint16_t port);
