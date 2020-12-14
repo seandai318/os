@@ -38,6 +38,13 @@ typedef struct {
 } osListPlus_t;
 
 
+typedef struct {
+	bool isFirst;			//if the current element uses "void* first" of osListPlus_t
+	bool isRetrieved;		//the osPlistPlus has done retrieval.  This is needed otherwise the retrieval will start from beginning automatically
+	osListElement_t* pLE;	//if the current element uses "osList_t more" of osListPlus_t
+} osListPlusElement_t;
+
+
 /** Linked list Initializer */
 #define LIST_INIT {NULL, NULL}
 
@@ -105,6 +112,7 @@ void osListElement_delete(osListElement_t* pLE);
 
 void osListPlus_init(osListPlus_t* pList, bool isDataStatic);
 osStatus_e osListPlus_append(osListPlus_t* pList, void* pData);
+void* osListPlus_getNextData(osListPlus_t* pList, osListPlusElement_t* pPlusLE);
 void osListPlus_clear(osListPlus_t* pList);
 void osListPlus_delete(osListPlus_t* pList);
 void osListPlus_free(osListPlus_t* pList);

@@ -800,6 +800,48 @@ EXIT:
 }
 
 
+void* osListPlus_getNextData(osListPlus_t* pList, osListPlusElement_t* pPlusLE)
+{
+	if(!pList || !pPlusLE || pPlusLE->isRetrieved)
+	{
+		return NULL;
+	}
+
+	void* pData = NULL;
+
+	if(pPlusLE->isFirst)
+	{
+		pPlusLE->isFirst = false;
+		pPlusLE->pLE = NULL;
+		pData = pList->first;
+	}
+	else
+	{
+		osListElement_t* pLE;
+		if(pPlusLE->pLE)
+		{
+			pLE = pPlusLE->pLE->next;
+		}
+		else
+		{
+			pPlusLE->pLE = pList->more.head;
+			pLE = pPlusLE->pLE;
+		}
+
+		if(pLE)
+		{
+			pData = pLE->data;
+		}
+		else
+		{
+			pPlusLE->isRetrieved = true;
+		}
+	}
+
+	return pData;
+}
+
+
 void osListPlus_clear(osListPlus_t* pList)
 {
 	if(!pList)
