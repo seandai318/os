@@ -142,6 +142,15 @@ static inline bool osList_isEmpty(const osList_t *list)
 	return list ? list->head == NULL : true;
 }
 
+static inline void osListPlusElement_init(osListPlusElement_t* pPlusLE)
+{
+	if(pPlusLE)
+	{
+		pPlusLE->isFirst = true;
+		pPlusLE->isRetrieved = false;
+		pPlusLE->pLE = NULL;
+	}
+}
 
 #define LIST_FOREACH(list, le)					\
 	for ((le) = list_head((list)); (le); (le) = (le)->next)
