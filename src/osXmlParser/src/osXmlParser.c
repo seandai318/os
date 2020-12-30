@@ -1201,7 +1201,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
         //that requires: within xmlData, the dataName has to be sorted from shortest to longest
         if(pElement->elemName.l < callbackInfo->xmlData[i].dataName.l)
         {
-            mdebug(LM_XMLP, "the app does not need element(%r), value=%r, ignore.", &pElement->elemName, isLeaf? value : NULL);
+            mdebug(LM_XMLP, "the app does not need element(%r), value=%r (xmlData[%d].dataName=%r), ignore.", &pElement->elemName, isLeaf? value : NULL, i, &callbackInfo->xmlData[i].dataName);
             return status;
         }
 

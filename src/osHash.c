@@ -201,6 +201,25 @@ void* osPlHash_getUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase)
 }
 
 
+void* osPlHash_getUserDataByLE(osHash_t *h, osListElement_t* pHashLE)
+{
+    if(!h || !pHashLE)
+    {
+        logError("null pointer, h=%p, pHashLE=%p.", h, pHashLE);
+        return NULL;
+    }
+
+	osHashData_t* pHashData = pHashLE->data;
+	if(!pHashData)
+	{
+		logError("null pHashData for hash(%p), hashLE(%p).", h, pHashLE);
+		return NULL;
+	}
+
+	return pHashData->pData;
+}
+	
+
 osListElement_t* osPlHash_getElement(osHash_t *h, osPointerLen_t* plKey, bool isCase)
 {
     if(!h || !plKey)
