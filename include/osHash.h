@@ -71,6 +71,7 @@ osHash_t* osHash_create(uint32_t bsize);
 //osPlHash_addUserData and osPlHash_getUserData has to be used in pair
 osListElement_t* osPlHash_addUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase, void* userData);
 void* osPlHash_getUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase);
+void* osPlHash_getUserDataByLE(osHash_t *h, osListElement_t* pHashLE);
 osListElement_t* osPlHash_getElement(osHash_t *h, osPointerLen_t* plKey, bool isCase);
 
 osListElement_t* osHash_add(osHash_t *h,  osHashData_t* pHashData);

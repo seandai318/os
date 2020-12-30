@@ -94,7 +94,6 @@ void osPL_trimLWS(osPointerLen_t* pl, bool isTrimTop, bool isTrimBottom);
 //split a string into 2, based on the first match of the splitter
 void osPL_split(osPointerLen_t* srcPL, char splitter, osPointerLen_t* sub1, osPointerLen_t* sub2);
 void osPL_compact(osPointerLen_t* pl);
-
 void osDPL_dealloc(osDPointerLen_t *pl);
 
 void osVPL_init(osVPointerLen_t* pl, bool isVPLDynamic);
@@ -128,6 +127,7 @@ static inline void osPL_advance(osPointerLen_t *pl, ssize_t n)
 	pl->l -= n;
 }
 
+
 static inline int osPL_shiftcpy(osPointerLen_t *dstPL, osPointerLen_t *srcPL, size_t n)
 {
 	if(!dstPL || !srcPL || n > srcPL->l)
@@ -138,6 +138,26 @@ static inline int osPL_shiftcpy(osPointerLen_t *dstPL, osPointerLen_t *srcPL, si
 	dstPL->l = srcPL->l - n;
 
 	return 0;
+}
+
+
+//dstPL will use the srcPL's p, but with starting and ending specified quote removed
+static inline void osPL_removeQuote(osPointerLen_t* dstPL, const osPointerLen_t* srcPL, char quote)
+{
+	if(!dstPL || !srcPL)
+	{
+		return;
+	}
+
+	if(srcPL->p[0] == quote && srcPL->p[srcPL->l-1] == quote)
+	{
+		dstPL->p = &srcPL->p[1];
+		dstPL->l = srcPL->l -2;
+	}
+	else
+	{
+		*dstPL = *srcPL;
+	}
 }
 
 
