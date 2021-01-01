@@ -18,6 +18,6 @@ osPointerLen_t* osXsd_getXSAlias();
 void osXsd_setXSAlias(osPointerLen_t* pXsAlias);
 void osXsdElement_cleanup(void* data);
 void osXsd_freeNsList();
-
+void osXsd_dbgListTargetNS();
 
 #endif

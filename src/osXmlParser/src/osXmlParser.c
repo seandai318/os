@@ -350,6 +350,7 @@ static osStatus_e osXml_parseRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo,
     	pRootNS = &pXsdPointer->pXmlnsInfo->defaultNS;
     }
 
+	mdebug(LM_XMLP, "rootNS=%r", pRootNS);
 //    //save the nsInfoList in the global list for the purpose of memory free when the parse is done
 //    osList_append(&pStateInfo->gNSList, pXsdPointer->pXmlnsInfo);
     pStateInfo->pCurXmlInfo = pXsdPointer->pXmlnsInfo;

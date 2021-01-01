@@ -31,7 +31,7 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
 static osStatus_e osXsd_parseGlobalTag(osMBuf_t* pXmlBuf, osList_t* pTypeList, osList_t* pSTypeList, osXmlTagInfo_t** pGlobalElemTagInfo, bool* isEndSchemaTag);
 static void* osXsd_getTypeByname(osList_t* pTypeList, osPointerLen_t* pElemTypeName);
 osStatus_e osXsd_parseSchemaTag(osMBuf_t* pXmlBuf, osXsd_schemaInfo_t* pSchemaInfo, bool* isSchemaTagDone);
-static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS, bool isCreateNS);
+static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS, bool isCreateNS, bool* isNewNS);
 static void osXsdSchema_cleanup(void* data);
 static void osXsdNS_cleanup(void* data);
 static osXsdElement_t* osXsd_getElementFromList(osList_t* pList, osPointerLen_t* pTag);
@@ -130,7 +130,8 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf, osPointerLen_t* pXsdName)
 	}
 
 	//for now assume the same schema is only inputed/parsed one time.  In the future, for safety, add a xsd name check to prevent the same schema been parsed multiple times
-	pNS = osXsd_getNS(&gXsdNSList, (osPointerLen_t*)&pSchema->schemaInfo.targetNS, true);
+	bool isNewNS = false;
+	pNS = osXsd_getNS(&gXsdNSList, (osPointerLen_t*)&pSchema->schemaInfo.targetNS, true, &isNewNS);
 	if(!pNS)
 	{
         logError("fails to osXsd_getNS for a pSchema(%r).", &pSchema->schemaInfo.targetNS);
@@ -157,7 +158,10 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf, osPointerLen_t* pXsdName)
         goto EXIT;
     }
 
-	osList_append(&gXsdNSList, pNS);
+	if(isNewNS)
+	{
+		osList_append(&gXsdNSList, pNS);
+	}
 
 	//intentionally to put last to make sure in error cases above, pXmlBuf will not be freed twice or not freed
 	pSchema->pXsdBuf = osmemref(pXmlBuf);
@@ -1382,22 +1386,59 @@ bool osXsd_isExistSchema(osPointerLen_t* pTargetNS)
 EXIT:
 	return isExistNS;
 }
+
+
+void osXsd_dbgListTargetNS()
+{
+    osXsdNamespace_t* pNS = NULL;
+
+    osListElement_t* pLE = gXsdNSList.head;
+    while(pLE)
+    {
+        pNS = pLE->data;
+		if(!pNS->pTargetNS)
+		{
+			int i=0;
+        	osListElement_t* pLE1 = pNS->schemaList.head;
+        	while(pLE1)
+        	{
+            	debug("targetNS=%r, i=%d, xsd file name as targetNS.", (osPointerLen_t*)&((osXsdSchema_t*)pLE1->data)->schemaInfo.targetNS, i++);
+            	pLE1 = pLE1->next;
+			}
+        }
+		else
+		{
+			debug("targetNS=%r.",  pNS->pTargetNS);
+		}
+
+        pLE = pLE->next;
+    }
+}
 	
 
-static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS, bool isCreateNS)
+static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTargetNS, bool isCreateNS, bool* isNewNS)
 {
 	osXsdNamespace_t* pNS = NULL;
 
-	if(!pXsdNSList || !pTargetNS)
+	if(!pXsdNSList || !pTargetNS || !isNewNS)
 	{
-		logError("NULL pointer, pXsdNSList=%p, pTargetNS=%p.", pXsdNSList, pTargetNS);
+		logError("NULL pointer, pXsdNSList=%p, pTargetNS=%p, isNewNS=%p.", pXsdNSList, pTargetNS, isNewNS);
 		goto EXIT;
 	}
 
+	*isNewNS = false;
 	osListElement_t* pLE = pXsdNSList->head;
 	while(pLE)
 	{
-		if(osPL_cmp(pTargetNS, ((osXsdNamespace_t*)pLE->data)->pTargetNS) == 0)
+		if(!pTargetNS->l)
+		{
+			if(!((osXsdNamespace_t*)pLE->data)->pTargetNS)
+			{
+				pNS = pLE->data;
+				goto EXIT;
+			}
+		}
+		else if(osPL_cmp(pTargetNS, ((osXsdNamespace_t*)pLE->data)->pTargetNS) == 0)
         {
         	pNS = pLE->data;
             goto EXIT;
@@ -1409,6 +1450,7 @@ static osXsdNamespace_t* osXsd_getNS(osList_t* pXsdNSList, osPointerLen_t* pTarg
 	if(isCreateNS)
 	{
 		pNS = oszalloc(sizeof(osXsdNamespace_t), osXsdNS_cleanup);
+		*isNewNS = true;
 	}
 EXIT:
 	return pNS;
@@ -1418,7 +1460,7 @@ EXIT:
 /* get a global element from a NS based on element tag.  The NS is identified from global gXsdNSList based on NS name
  * 
  * pTargetNS:       IN, the NS name or a xsd name
- * isEmptyTargetNS: IN, if the NS a empty NS.  If empty NS, the pTargetNS contains a xsd name
+ * isEmptyTargetNS: IN, if the NS a empty NS.  If empty NS, the pTargetNS contains a xsd file name
  * pElemTag:        IN, the tag name of the global element
  */
 osXsdElement_t* osXsd_getNSRootElem(osPointerLen_t* pTargetNS, bool isEmptyTargetNS, osPointerLen_t* pElemTag)
@@ -1432,6 +1474,11 @@ osXsdElement_t* osXsd_getNSRootElem(osPointerLen_t* pTargetNS, bool isEmptyTarge
 		return NULL;
 	}
 
+#if 1	//to-remove
+{
+	osXsd_dbgListTargetNS();
+}
+#endif
 	//find the right NS from gXsdNSList based on pTargetNS and isEmptyTargetNS
 	osListElement_t* pLE = gXsdNSList.head;
 	while(pLE)
