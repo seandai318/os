@@ -40,8 +40,11 @@ static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagI
 
 //the current xs namespace alias (it does not have to be "xs"), always point to the one stored in the current processing root element
 static __thread osPointerLen_t* pCurXSAlias;
+#if 0
 static __thread osList_t gXsdNSList;	//each entry contains a osXsdNamespace_t
-
+#else
+static osList_t gXsdNSList;    //each entry contains a osXsdNamespace_t
+#endif
 
 static void tempPrint(osList_t* pList, int i)
 {
@@ -147,7 +150,6 @@ osXsdNamespace_t* osXsd_parse(osMBuf_t* pXmlBuf, osPointerLen_t* pXsdName)
 
 		//fill the schemaInfo.targetNS with the xsd name, make sure to copy the pl->p
 		osDPL_dup(&pSchema->schemaInfo.targetNS, pXsdName);
-	//	pSchema->schemaInfo.targetNS = *pXsdName;
     }
 
     if(!osList_append(&pNS->schemaList, pSchema))
@@ -339,7 +341,7 @@ bool osXsd_isValid(osMBuf_t* pXsdBuf, osPointerLen_t* xsdName, bool isKeepNsList
 
 	if(!isKeepNsList)
 	{
-		osList_delete(&gXsdNSList);
+		osXsd_freeNsList(xsdName);
 	}
 
     return true;
@@ -1392,6 +1394,7 @@ void osXsd_dbgListTargetNS()
 {
     osXsdNamespace_t* pNS = NULL;
 
+	debug("gXsdNSList count = %d.", osList_getCount(&gXsdNSList));
     osListElement_t* pLE = gXsdNSList.head;
     while(pLE)
     {
@@ -1474,11 +1477,6 @@ osXsdElement_t* osXsd_getNSRootElem(osPointerLen_t* pTargetNS, bool isEmptyTarge
 		return NULL;
 	}
 
-#if 1	//to-remove
-{
-	osXsd_dbgListTargetNS();
-}
-#endif
 	//find the right NS from gXsdNSList based on pTargetNS and isEmptyTargetNS
 	osListElement_t* pLE = gXsdNSList.head;
 	while(pLE)
@@ -1534,6 +1532,11 @@ osXsdElement_t* osXsd_getNSRootElem(osPointerLen_t* pTargetNS, bool isEmptyTarge
 
 EXIT:
 	mdebug(LM_XMLP, "root element for tag(%r) in pTargetNS(%r), isEmptyTargetNS(%d) is %s", pElemTag, pTargetNS, isEmptyTargetNS, pElem ? "found" : "not found");
+	if(!pElem)
+	{
+		osXsd_dbgListTargetNS();
+	}
+
 	return pElem;
 }
 
@@ -1613,7 +1616,54 @@ void osXsdNS_cleanup(void* data)
 }
 
 
-void osXsd_freeNsList()
+void osXsd_freeNsList(osPointerLen_t* pTargetNS)
 {
-	osList_delete(&gXsdNSList);
+	osListElement_t* pEmptyNSLE = NULL;
+
+	osListElement_t* pLE = gXsdNSList.head;
+	while(pLE)
+	{
+        if(!((osXsdNamespace_t*)pLE->data)->pTargetNS)
+        {
+            pEmptyNSLE = pLE;
+        }
+        else
+        {
+            if(osPL_cmp(pTargetNS, ((osXsdNamespace_t*)pLE->data)->pTargetNS) == 0)
+            {
+                osList_deleteElementAll(pLE, true);
+				goto EXIT;
+                break;
+            }
+        }
+
+        pLE = pLE->next;
+    }
+
+    if(pEmptyNSLE)
+    {
+		osXsdNamespace_t* pEmptyNS = pEmptyNSLE->data;
+
+        //from the NS, compare the element based on the pElemTag.  if the NS is a empty NS, find the right schema first
+        osListElement_t* pLE1 = pEmptyNS->schemaList.head;
+        while(pLE1)
+        {
+            //for xsd name, find the schema that matching the xsd name
+            if(osPL_cmp((osPointerLen_t*)&((osXsdSchema_t*)pLE1->data)->schemaInfo.targetNS, pTargetNS) == 0)
+            {
+				osList_deleteElementAll(pLE1, true);
+				if(osList_getCount(&pEmptyNS->schemaList) == 0)
+				{
+					osList_deleteElementAll(pEmptyNSLE, true);
+                }
+				goto EXIT;
+				break;
+            }
+
+            pLE1 = pLE1->next;
+        }
+    }
+
+EXIT:
+	return;
 }

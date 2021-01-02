@@ -24,6 +24,8 @@
 static void osXmlTagInfo_cleanup(void* data);
 
 
+static __thread bool gIsDoubleQuote;
+
 /* this function parse a information inside quote <...> in XSD or XML
  * isTagNameChecked = true, parse starts after tag name, = false, parse starts before <
  * isTagDone == true, the tag is wrapped in one line, i.e., <tag, tag-content />
@@ -239,8 +241,9 @@ osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirst
                 }
                 break;
             case OS_XSD_TAG_INFO_CONTENT_VALUE_START:
-                if(pBuf->buf[pBuf->pos] == '"')
+                if(pBuf->buf[pBuf->pos] == '"' || pBuf->buf[pBuf->pos] == '\'')
                 {
+					gIsDoubleQuote = pBuf->buf[pBuf->pos] == '"' ? true : false;
                     pnvPair->value.p = &pBuf->buf[pBuf->pos+1];     //+1 to start after the current char "
                     nvStartPos = pBuf->pos + 1;                     //+1 to start after the current char "
 
@@ -253,7 +256,7 @@ osStatus_e osXml_parseTag(osMBuf_t* pBuf, bool isTagNameChecked, bool isXsdFirst
                 }
                 break;
             case OS_XSD_TAG_INFO_CONTENT_VALUE:
-                if(pBuf->buf[pBuf->pos] == '"')
+                if((pBuf->buf[pBuf->pos] == '"' && gIsDoubleQuote) || (pBuf->buf[pBuf->pos] == '\'' && !gIsDoubleQuote))
                 {
                     pnvPair->value.l = pBuf->pos - nvStartPos;
                     state = OS_XSD_TAG_INFO_CONTENT_NAME_START;
@@ -298,7 +301,7 @@ EXIT:
         {
             pTagInfo->isTagDone = isTagDone;
             pTagInfo->isEndTag = isEndTag;
-            mdebug(LM_XMLP, "tag=%r is parsed, isTagDone=%d, isEndTag=%d", &pTagInfo->tag, pTagInfo->isTagDone, pTagInfo->isEndTag);
+            mdebug(LM_XMLP, "tag=%r is parsed, isTagDone=%d, isEndTag=%d, pos=%ld", &pTagInfo->tag, pTagInfo->isTagDone, pTagInfo->isEndTag, pBuf->pos);
         }
     }
 

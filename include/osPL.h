@@ -80,6 +80,7 @@ int osPL_strcpy(const osPointerLen_t *pl, char *str, size_t size);
 //copy a content of srcPL to dstPL, the len of srcPL must be smaller than or equal to dstPL
 int osPL_plcpy(osPointerLen_t* dstPL, osPointerLen_t* srcPL);
 int osPL_strdup(char **dst, const osPointerLen_t *src);
+int osPL_str2PLdup(osPointerLen_t* pDestPL, char* srcStr, int strlen);
 int osDPL_dup(osDPointerLen_t *dst, const osPointerLen_t *src);
 osPointerLen_t osPL_clone(const osPointerLen_t* pl);
 //osPointerLen_t osPL_cloneRef(const osPointerLen_t* pl);

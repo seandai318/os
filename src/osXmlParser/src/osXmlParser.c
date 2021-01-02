@@ -1073,7 +1073,7 @@ osStatus_e osXml_getElemValue(osPointerLen_t* xsdName, osMBuf_t* xsdMBuf, osMBuf
     	logInfo("xsd parse for %r is done.", xsdName);
 	}
 
-    logInfo("start xml parse.");
+    logInfo("start xml parse, xml size=%ld.", xmlBuf->end);
 //    osXsdSchema_t* pSchema = pNS->schemaList.head->data;
     status = osXml_parseInternal(xmlBuf, xsdName, callbackInfo);
     if(status != OS_STATUS_OK)
@@ -1087,7 +1087,7 @@ osStatus_e osXml_getElemValue(osPointerLen_t* xsdName, osMBuf_t* xsdMBuf, osMBuf
 EXIT:
 	if(!isKeepXsdNsList)
 	{
-    	osXsd_freeNsList();
+    	osXsd_freeNsList(xsdName);
 	}
 
     return status;
@@ -1202,7 +1202,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
         //that requires: within xmlData, the dataName has to be sorted from shortest to longest
         if(pElement->elemName.l < callbackInfo->xmlData[i].dataName.l)
         {
-            mdebug(LM_XMLP, "the app does not need element(%r), value=%r (xmlData[%d].dataName=%r), ignore.", &pElement->elemName, isLeaf? value : NULL, i, &callbackInfo->xmlData[i].dataName);
+            mdebug(LM_XMLP, "the app does not need element(%r), value=%r, ignore.", &pElement->elemName, isLeaf? value : NULL);
             return status;
         }
 

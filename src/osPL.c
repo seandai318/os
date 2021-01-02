@@ -511,6 +511,24 @@ int osPL_strdup(char **dst, const osPointerLen_t *src)
 }
 
 
+int osPL_str2PLdup(osPointerLen_t* pDestPL, char* srcStr, int strlen)
+{
+	if(!pDestPL || !srcStr)
+	{
+		return -1;
+	}
+
+	pDestPL->p = osmalloc_r(strlen, NULL);
+	if(!pDestPL->p)
+	{
+		return -1;
+	}
+
+	memcpy((char*)pDestPL->p, srcStr, strlen);
+	pDestPL->l = strlen;
+
+	return 0;
+}
 /**
  * Duplicate a pointer-length object to a new pointer-length object
  *
