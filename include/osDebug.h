@@ -325,6 +325,14 @@ do {\
 } while(0);\
 
 
+#define mdebug1(module, ...) \
+do {\
+    if(osDbg_isBypass(DBG_DEBUG, module)) \
+        continue;   \
+    osDbg_printf(DBG_DEBUG, __VA_ARGS__);\
+} while(0);\
+
+
 #define DEBUG_BEGIN	debug("entering...")
 #define DEBUG_END	debug("exit.")
 
