@@ -36,6 +36,10 @@
 #define MBUF_CHECK_END(mb)
 #endif
 
+
+#define OSMBUF_CHAR(mb, delta)	mb->buf[mb->pos + delta]
+
+
 /** Defines a memory buffer, the buf has to be allocated via one of osMemory methods */
 typedef struct osMBuf {
 	uint8_t *buf;   /**< Buffer memory      */
