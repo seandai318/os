@@ -454,14 +454,13 @@ osXsdElement_t* osXsd_createAnyElem(osPointerLen_t* pTag, bool isRootAnyElem)
 		return NULL;
 	}
 
-	osXsdElement_t* pXsdElem = oszalloc(sizeof(osXsdElement_t), NULL);
+	osXsdElement_t* pXsdElem = oszalloc(sizeof(osXsdElement_t), osXsdElement_cleanup);
 	if(!pXsdElem)
 	{
 		logError("fails to oszalloc() for pXsdElem.");
 		return NULL;
 	}
 
-	pXsdElem->isElementAny = true;
 	pXsdElem->elemName = *pTag;
 	pXsdElem->dataType = OS_XML_DATA_TYPE_ANY;	//for a <xs:any> element, ALWAYS treat it as a OS_XML_DATA_TYPE_ANY
 	pXsdElem->anyElem.isXmlAnyElem = true;

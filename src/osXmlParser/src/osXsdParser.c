@@ -365,9 +365,9 @@ static osStatus_e osXsd_elemLinkChild(osXsdElement_t* pParentElem, osList_t* pCT
 		goto EXIT;
 	}
 
-	mdebug(LM_XMLP, "pParentElem->elemTypeName=%r, isElementAny=%d, dataType=%d", &pParentElem->elemTypeName, pParentElem->isElementAny, pParentElem->dataType);
+	mdebug(LM_XMLP, "pParentElem->elemTypeName=%r, isElementAny=%d, dataType=%d", &pParentElem->elemTypeName, pParentElem->dataType == OS_XML_DATA_TYPE_ANY, pParentElem->dataType);
 	//check if it is a xs:any element
-	if(pParentElem->isElementAny)
+	if(pParentElem->dataType == OS_XML_DATA_TYPE_ANY)
 	{
 		goto EXIT;
 	}
@@ -749,6 +749,7 @@ osXsdElement_t* osXsd_parseElement(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTagIn
             goto EXIT;
         }
 
+		//case </xs:xxxx>
         if(pTagInfo->isEndTag)
         {
             osListElement_t* pLE = osList_popTail(&tagList);
@@ -846,7 +847,7 @@ osXsdElement_t* osXsd_parseElementAny(osMBuf_t* pXmlBuf, osXmlTagInfo_t* pElemTa
     }
 
     pElement = oszalloc(sizeof(osXsdElement_t), osXsdElement_cleanup);
-    pElement->isElementAny = true;
+	pElement->dataType = OS_XML_DATA_TYPE_ANY;
     pElement->anyElem.elemAnyTag.processContent = OS_XSD_PROCESS_CONTENTS_STRICT;
 
     status = osXmlElement_getAttrInfo(&pElemTagInfo->attrNVList, pElement);
@@ -985,7 +986,7 @@ osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElemen
 				{
 					pElement->elemName = pNV->value;
 				}
-				else if(pElement->isElementAny && pNV->name.l == 9 && strncmp("namespace", pNV->name.p, pNV->name.l) == 0)
+				else if(pElement->dataType == OS_XML_DATA_TYPE_ANY && pNV->name.l == 9 && strncmp("namespace", pNV->name.p, pNV->name.l) == 0)
 				{
 					if(pNV->value.l == 5 && osPL_strcmp(&pNV->value, "##any") ==0)
 					{
@@ -1088,7 +1089,7 @@ osStatus_e osXmlElement_getAttrInfo(osList_t* pAttrList, osXsdElement_t* pElemen
 				}
 				break;
 			case 'p':	//processContents
-				if(pElement->isElementAny && pNV->name.l == 15 && osPL_strcmp(&pNV->name, "processContents") == 0)
+				if(pElement->dataType == OS_XML_DATA_TYPE_ANY && pNV->name.l == 15 && osPL_strcmp(&pNV->name, "processContents") == 0)
 				{
 					if(osPL_strcmp(&pNV->value, "lax") == 0)
 					{
@@ -1125,8 +1126,6 @@ static osStatus_e osXmlElement_getSubTagInfo(osXsdElement_t* pElement, osXmlTagI
 
 	return OS_STATUS_OK;
 }
-
-
 
 
 /* return a matching osComplexType_t or osXmlSimpleType_t.
@@ -1585,6 +1584,8 @@ void osXsdElement_cleanup(void* data)
     {
 		osXmlComplexType_cleanup(pElement->pComplex);
     }
+
+	osfree(pElement->pChoiceInfo);
 }
 
 

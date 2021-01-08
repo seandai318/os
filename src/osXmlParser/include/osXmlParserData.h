@@ -75,7 +75,7 @@ typedef enum {
 typedef enum {
 	OS_XML_ELEMENT_DISP_TYPE_ALL,
 	OS_XML_ELEMENT_DISP_TYPE_SEQUENCE,
-	OS_XML_ELEMENT_DISP_TYPE_CHOICE,
+//	OS_XML_ELEMENT_DISP_TYPE_CHOICE,	//the choice is implemented as a property of a element
 } osXmlElemDispType_e;
 
 
@@ -98,7 +98,6 @@ typedef struct {
 	osXsdAnyElemNS_e elemNamespace;	//for now, only support ##any or ##other
 	osXsdAnyElemPS_e processContent;
 } osXsdAnyElementTag_t;
-
 
 
 typedef struct {
@@ -124,6 +123,14 @@ typedef struct {
 
 
 typedef struct {
+    int minOccurs;          //>=0
+    int maxOccurs;          // -1 means unbounded
+	uint32_t tag;			//uniquely identify a choice block
+	uint32_t xmlElementCount;	//how many times elements inside the choice block present in xml.  This is a helper function for xml parser, not needed by xsd	
+} osXsd_choiceInfo_t;
+ 	
+
+typedef struct {
     osDPointerLen_t targetNS;	//target ns or a xsd name (for no target ns schema), when xsd nme is used, ns.pTargetNS = NULL. useosDPointerLen_t because the pl->p is dynamically allocated to take care the case that user passed in xsdName may be a local variable.
     osList_t nsAliasList;		//each entry contains osXsd_nsAliasInfo_t
     osPointerLen_t defaultNS;
@@ -133,10 +140,11 @@ typedef struct {
 
 typedef struct osXsdElement {
 	bool isRootElement;
-	bool isElementAny;		//if this is <xsd:any>
+//	bool isElementAny;		//if this is <xsd:any>
 	osPointerLen_t elemName;
 	osXsd_schemaInfo_t* pSchema;
 	osPointerLen_t elemTypeName;
+	osXsd_choiceInfo_t* pChoiceInfo;
 	int minOccurs;			//>=0
 	int maxOccurs;			// -1 means unbounded
     bool isQualified;
@@ -147,7 +155,7 @@ typedef struct osXsdElement {
 	union {
 		osXmlComplexType_t* pComplex;
 		osXmlSimpleType_t* pSimple;
-		osXmlAnyElemInfo_t anyElem;		//if isElementAny = true
+		osXmlAnyElemInfo_t anyElem;		//if dataType = OS_XML_DATA_TYPE_ANY
 	};
 //	osList_t* pSimpleTypeList;	//Since simpleType objects shall be kept permanently, this can be removed.  Currently this is not used.
 } osXsdElement_t;
@@ -175,7 +183,7 @@ typedef struct {
     osPointerLen_t tag;
     bool isTagDone;                 //the tag is wrapped in one line, i.e., <tag, tag-content />
     bool isEndTag;                  //the line is the end of tag, i.e., </tag>
-    bool isPElement;                //if the union data is pElement, this value is true.  That happens in <xs:element> xxx </element> or <xs:any> xxx </xs:any>
+    bool isPElement;                //if the union data is pElement, this value is true.  That happens in <xs:element> xxx </element> <xs:choice> xxx </choice> or <xs:any> xxx </xs:any>
     union {
         osList_t attrNVList;        //each list element contains osXmlNameValue_t, for <xs:element xxx />, <xs:any xxx /> and other xs:xxx cases
         osXsdElement_t* pElement;   //if tag is xs:element or xs:any, and contains sub tags (i.e., the element and any do not end in one line), this data structure will be used

@@ -29,11 +29,18 @@
 
 
 //this data structure used to help xml parsing against its xsd
+typedef struct {
+	uint8_t childCount;			//how many times a child element appear in a CT
+//	bool choiceElementUsed;		//only applicable if the child element is part of a choice, true if the child choice element shown in xml, false if not
+	uint16_t choiceTag;			//the choice tag that identifies a choice group
+} osXsd_assignedChildInfo_t;
+
+
 typedef struct osXsd_elemPointer {
     osXsdElement_t* pCurElem;       //the current working xsd element
     struct osXsd_elemPointer* pParentXsdPointer;    //the parent xsd pointer
     int curIdx;                     //which idx in assignedChildIdx[] that the xsd element is current processing, used in for the ordering presence of sequence deposition
-    bool  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
+    osXsd_assignedChildInfo_t  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
 	osXml_nsInfo_t* pXmlnsInfo;	//would not use osXsd_schemaInfo_t.targetNS here
 } osXsd_elemPointer_t;
 
@@ -76,9 +83,9 @@ static void osXmlNsInfo_cleanup(void* data);
 
 static osStatus_e osXml_parseInternal(osMBuf_t* pBuf, osPointerLen_t* xsdName, osXmlDataCallbackInfo_t* callbackInfo);
 static osStatus_e osXml_parseRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
-static osStatus_e osXml_parseSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
-static osStatus_e osXml_parseEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
-static osStatus_e osXml_parseDOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
+static osStatus_e osXml_parseSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);	//Start Of Tag	<xs:aaa>
+static osStatus_e osXml_parseEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);	//End Of Tag	</xs:aaa>
+static osStatus_e osXml_parseDOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);	//Done Of Tag <xs:aaa />
 static osStatus_e osXml_parseAnyRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
 static osStatus_e osXml_parseAnyElemSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
 static osStatus_e osXml_parseAnyElemDOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
@@ -378,7 +385,7 @@ static osStatus_e osXml_parseRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo,
     }
 
     //only perform NULL value osXml_xmlCallback() when the element is not a leaf or is <xs:any> element, be note at that time we do not know if a <xs:any> element is a leaf
-    if(pStateInfo->callbackInfo->isAllowNoLeaf && (!osXml_isXsdElemSimpleType(pXsdPointer->pCurElem) || pXsdPointer->pCurElem->isElementAny))
+    if(pStateInfo->callbackInfo->isAllowNoLeaf && (!osXml_isXsdElemSimpleType(pXsdPointer->pCurElem) || pXsdPointer->pCurElem->dataType == OS_XML_DATA_TYPE_ANY))
     {
     	//The data sanity check is performed by callback()
         status = osXml_xmlCallback(pXsdPointer->pCurElem, NULL, &noXmlnsAttrList, false, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
@@ -427,7 +434,7 @@ static osStatus_e osXml_parseSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
     pXsdPointer->pXmlnsInfo = pXsdPointer->pParentXsdPointer->pXmlnsInfo;
 	pXsdPointer->pCurElem = pCurElem;
 
-	//check OS_XML_ELEMENT_DISP_TYPE_SEQUENCE case to make sure the element is ordered
+	//check OS_XML_ELEMENT_DISP_TYPE_SEQUENCE case to make sure the element is ordered.  the maxOccurs will be checked later in this function.  the minOccurs will be checked in EOT function
 	if(parentXsdDispType == OS_XML_ELEMENT_DISP_TYPE_SEQUENCE)
 	{
 		if(listIdx == pParentXsdPointer->curIdx)
@@ -447,39 +454,50 @@ static osStatus_e osXml_parseSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
                 goto EXIT;
             }
 
-            //check the element in front of the pXsdPointer->pCurElem
             for(int i=pParentXsdPointer->curIdx+1; i<listIdx; i++)
             {
-                if(pParentXsdPointer->assignedChildIdx[i] == 0)
+                osXsdElement_t* pXsdElem = osList_getDataByIdx(&pParentCT->elemList, i);
+                if(!pXsdElem)
                 {
-                    osXsdElement_t* pXsdElem = osList_getDataByIdx(&pParentCT->elemList, i);
-                    if(!pXsdElem)
-                    {
-                        logError("elemList idx(%d) does not have xsd element data, this shall never happen.", pParentXsdPointer->curIdx);
-                        osfree(pXsdPointer);
-                        goto EXIT;
-                    }
+                    logError("elemList idx(%d) does not have xsd element data, this shall never happen.", pParentXsdPointer->curIdx);
+                    osfree(pXsdPointer);
+                    goto EXIT;
+                }
 
-                    if(pXsdElem->minOccurs == 0)
+				if(pXsdElem->pChoiceInfo)
+				{
+					//the gap Elem and the current elem belongs to the same choice, move on 
+					if(pCurElem->pChoiceInfo && pCurElem->pChoiceInfo->tag == pXsdElem->pChoiceInfo->tag)
+					{
+						continue;
+					}				
+
+					//the gap elem is a choice element, and the choice has minOccurs = 0
+					if(pXsdElem->pChoiceInfo->minOccurs == 0)
+					{
+						continue;
+					}
+				}
+
+                if(pXsdElem->minOccurs > 0)
+                {
+                    logError("curidx=%d, element(%r) minOccurs=%d, and the parent CT is sequence disposition type, but the element does not show up before the current idx(%d).", i, &pXsdElem->elemName, pXsdElem->minOccurs, listIdx);
+                    osfree(pXsdPointer);
+                    status = OS_ERROR_INVALID_VALUE;
+                    goto EXIT;
+				}
+				else
+				{
+	                //browse the info for xsd that is not configured in the xml file.  Inside the function, callback for the default value will be called
+                    if(pStateInfo->callbackInfo->isUseDefault)
                     {
-	                    //browse the info for xsd that is not configured in the xml file.  Inside the function, callback for the default value will be called
-                        if(pStateInfo->callbackInfo->isUseDefault)
+                    	status = osXsd_browseNode(pXsdElem, pStateInfo->callbackInfo);
+                        if(status != OS_STATUS_OK)
                         {
-    	                    status = osXsd_browseNode(pXsdElem, pStateInfo->callbackInfo);
-                            if(status != OS_STATUS_OK)
-                            {
-        	                    osfree(pXsdPointer);
-                                goto EXIT;
-                            }
+        	                osfree(pXsdPointer);
+                            goto EXIT;
                         }
                     }
-                    else
-                    {
-            	       	logError("curidx=%d, element(%r) minOccurs=%d, and the parent CT is sequence disposition type, but the element does not show up before the current idx(%d).", i, &pXsdElem->elemName, pXsdElem->minOccurs, listIdx);
-                      	osfree(pXsdPointer);
-                       	status = OS_ERROR_INVALID_VALUE;
-                       	goto EXIT;
-                   	}
                 }
             }
             pParentXsdPointer->curIdx = listIdx;
@@ -493,16 +511,36 @@ static osStatus_e osXml_parseSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
         }
     } //if(parentXsdDispType == OS_XML_ELEMENT_DISP_TYPE_SEQUENCE)
 
-    //check the maximum element occurrence is not exceeded
-    ++pParentXsdPointer->assignedChildIdx[listIdx];
-    mdebug(LM_XMLP, "pParentXsdPointer->assignedChildIdx[%d]=%d", listIdx, pParentXsdPointer->assignedChildIdx[listIdx]);
-    if(pXsdPointer->pCurElem->maxOccurs != -1 && pParentXsdPointer->assignedChildIdx[listIdx] > pXsdPointer->pCurElem->maxOccurs)
+    if(pCurElem->pChoiceInfo)
     {
-        logError("the element(%r) exceeds the maxOccurs(%d).", &pXsdPointer->pCurElem->elemName, pXsdPointer->pCurElem->maxOccurs);
-        status = OS_ERROR_INVALID_VALUE;
-        osfree(pXsdPointer);
-        goto EXIT;
+        pCurElem->pChoiceInfo->xmlElementCount++;
+        pParentXsdPointer->assignedChildIdx[listIdx].choiceTag = pCurElem->pChoiceInfo->tag;
     }
+    ++pParentXsdPointer->assignedChildIdx[listIdx].childCount;
+
+    mdebug(LM_XMLP, "pParentXsdPointer->assignedChildIdx[%d].childCount=%d", listIdx, pParentXsdPointer->assignedChildIdx[listIdx].childCount);
+
+    //check the maximum element occurrence is not exceeded
+	if(pCurElem->pChoiceInfo)
+	{
+		if(pCurElem->pChoiceInfo->maxOccurs != -1 && pCurElem->pChoiceInfo->xmlElementCount > pCurElem->pChoiceInfo->maxOccurs)
+		{
+            logError("the choice block that contains element(%r) occurance(%d) exceeds the maxOccurs(%d).", &pXsdPointer->pCurElem->elemName, pCurElem->pChoiceInfo->xmlElementCount, pCurElem->pChoiceInfo->xmlElementCount);
+            status = OS_ERROR_INVALID_VALUE;
+            osfree(pXsdPointer);
+            goto EXIT;
+		}
+	}
+	else
+	{
+		if(pXsdPointer->pCurElem->maxOccurs != -1 && pParentXsdPointer->assignedChildIdx[listIdx].childCount > pXsdPointer->pCurElem->maxOccurs)
+    	{
+        	logError("the element(%r) occurance(%d) exceeds the maxOccurs(%d).", &pXsdPointer->pCurElem->elemName, pParentXsdPointer->assignedChildIdx[listIdx].childCount, pXsdPointer->pCurElem->maxOccurs);
+        	status = OS_ERROR_INVALID_VALUE;
+        	osfree(pXsdPointer);
+        	goto EXIT;
+    	}
+	}
 
     if(osXml_isXsdElemSimpleType(pXsdPointer->pCurElem))
     {
@@ -563,76 +601,51 @@ static osStatus_e osXml_parseEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
 
         osXmlElemDispType_e elemDispType = pParentCT->elemDispType;
         int choiceElemCount = 0;
+		//check for minOccurs.  The check of maxOccurs happens in parseSOT
         for(int i=0; i<osList_getCount(&pParentCT->elemList); i++)
         {
-        	switch(elemDispType)
+          	osXsdElement_t* pXsdElem = osList_getDataByIdx(&pParentCT->elemList, i);
+            if(!pXsdElem)
             {
-            	case OS_XML_ELEMENT_DISP_TYPE_ALL:
-                {
-                	if(pParentXsdPointer->assignedChildIdx[i] == 0)
-                    {
-                    	osXsdElement_t* pXsdElem = osList_getDataByIdx(&pParentCT->elemList, i);
-                        if(!pXsdElem)
-                        {
-                        	logError("elemList idx(%d) does not have xsd element data, this shall never happen.", i);
-                            osListElement_delete(pLE);
-                            goto EXIT;
-                        }
+              	logError("elemList idx(%d) does not have xsd element data, this shall never happen.", i);
+                osListElement_delete(pLE);
+                goto EXIT;
+            }
 
-                        if(pXsdElem->minOccurs > 0)
-                        {
-                        	logError("element(%r) minOccurs=%d, but xml does not have the corresponding data.", &pXsdElem->elemName, pXsdElem->minOccurs);
-                            osListElement_delete(pLE);
-                            status = OS_ERROR_INVALID_VALUE;
-                            goto EXIT;
-                        }
-                        else
-                        {
-                        	//browse the info for xsd that is not configured in the xml file, inside the function, callback for the default value will be called
-                            if(pStateInfo->callbackInfo->isUseDefault)
-                            {
-                            	status = osXsd_browseNode(pXsdElem, pStateInfo->callbackInfo);
-                                if(status != OS_STATUS_OK)
-                                {
-                                	osListElement_delete(pLE);
-                                    goto EXIT;
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                    	//the check of the maxOccurs is done in <element_name> section, do nothing here.
-                    }
-                    break;
+		    if(pXsdElem->pChoiceInfo)
+    		{
+        		if(pXsdElem->pChoiceInfo->xmlElementCount < pXsdElem->pChoiceInfo->minOccurs)
+        		{
+            		logError("the choice block that contains element(%r) occurance(%d) is less than the minOccurs(%d).", &pXsdElem->elemName, pXsdElem->pChoiceInfo->xmlElementCount, pXsdElem->pChoiceInfo->minOccurs);
+					osListElement_delete(pLE);
+            		status = OS_ERROR_INVALID_VALUE;
+            		goto EXIT;
+				}
+    		}
+			else
+    		{
+				if(pParentXsdPointer->assignedChildIdx[i].childCount < pXsdElem->minOccurs)
+				{
+                    logError("the element(%r) occurance(%d) is less than the minOccurs(%d).", &pXsdElem->elemName, pParentXsdPointer->assignedChildIdx[i].childCount, pXsdElem->minOccurs);
+                    osListElement_delete(pLE);
+                    status = OS_ERROR_INVALID_VALUE;
+                    goto EXIT;
                 }
-                case OS_XML_ELEMENT_DISP_TYPE_CHOICE:
+			}
+
+			//default callback for OS_XML_ELEMENT_DISP_TYPE_SEQUENCE happens in parseSOT.  Here only for OS_XML_ELEMENT_DISP_TYPE_ALL
+			if(elemDispType == OS_XML_ELEMENT_DISP_TYPE_ALL && pXsdElem->minOccurs == 0 && pParentXsdPointer->assignedChildIdx[i].childCount == 0)
+            {
+               	//browse the info for xsd that is not configured in the xml file, inside the function, callback for the default value will be called
+                if(pStateInfo->callbackInfo->isUseDefault)
                 {
-                	if(pParentXsdPointer->assignedChildIdx[i] != 0)
+                  	status = osXsd_browseNode(pXsdElem, pStateInfo->callbackInfo);
+                    if(status != OS_STATUS_OK)
                     {
-                    	choiceElemCount++;
-                    }
-
-                    if(choiceElemCount > 1)
-                    {
-                    	osXsdElement_t* pXsdElem = osList_getDataByIdx(&pParentCT->elemList, i);
-                        if(!pXsdElem)
-                        {
-                        	logError("elemList idx(%d) does not have xsd element data, this shall never happen.", i);
-                           	osListElement_delete(pLE);
-                            goto EXIT;
-                        }
-
-                        logError("element(%r) belongs to a complex type that has choice disposition, but there is already other element present.", &pXsdElem->elemName);
-                        osListElement_delete(pLE);
-                        status = OS_ERROR_INVALID_VALUE;
+                      	osListElement_delete(pLE);
                         goto EXIT;
                     }
-                    break;
                 }
-                case OS_XML_ELEMENT_DISP_TYPE_SEQUENCE:
-                	//shall already be taken care of in <element_name> section, no need to consider here.
-                    break;
             }
         }
 
@@ -706,7 +719,8 @@ static osStatus_e osXml_parseDOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
         goto EXIT;
     }
 
-    pStateInfo->pParentXsdPointer->assignedChildIdx[listIdx] = true;
+	//to-do, this may need to be modified to follow the same as in SOT, to chek if there is gap for OS_XML_ELEMENT_DISP_TYPE_SEQUENCE case 
+    ++pStateInfo->pParentXsdPointer->assignedChildIdx[listIdx].childCount;
 
     status = osXml_xmlCallback(pCurElem, NULL, &pElemInfo->attrNVList, false, pStateInfo->callbackInfo, pStateInfo->pCurXmlInfo);
 
@@ -1118,7 +1132,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 	//leaf related check
 	if(value)
 	{
-		if(!osXml_isXsdElemSimpleType(pElement) && !(pElement->isElementAny && pElement->anyElem.xmlAnyElem.isLeaf))
+		if(!osXml_isXsdElemSimpleType(pElement) && !(pElement->dataType == OS_XML_DATA_TYPE_ANY && pElement->anyElem.xmlAnyElem.isLeaf))
 		{
 			logError("a no leaf element(%r) has a value(%r)", &pElement->elemName, value);
 			return OS_ERROR_INVALID_VALUE;
@@ -1149,7 +1163,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 
 	    if(isLeaf && value)
         {
-            if(pElement->isElementAny)
+			if(pElement->dataType == OS_XML_DATA_TYPE_ANY)
             {
                 pElement->dataType = OS_XML_DATA_TYPE_XS_STRING;
             }
@@ -1226,7 +1240,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 
 			if(isLeaf && value)
 			{
-				if(pElement->isElementAny)
+				if(pElement->dataType == OS_XML_DATA_TYPE_ANY)
 				{
 					pElement->dataType = OS_XML_DATA_TYPE_XS_STRING;
 				}
@@ -1326,16 +1340,18 @@ static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_el
         if(osPL_cmp(pTag, &((osXsdElement_t*)pLE->data)->elemName) == 0)
         {
             pChildXsdElem = pLE->data;
-            break;
+            goto EXIT;
         }
 
         pLE = pLE->next;
     }
 
+    //no match found, set back to -1
+    *listIdx = -1;
+
 EXIT:
     return pChildXsdElem;
 }
-
 
 
 static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer)
@@ -1375,7 +1391,7 @@ static bool isExistXsdAnyElem(osXsd_elemPointer_t* pXsdPointer)
     osListElement_t* pLE = pCT->elemList.head;
     while(pLE)
     {
-        if(((osXsdElement_t*)pLE->data)->isElementAny)
+		if(((osXsdElement_t*)pLE->data)->dataType == OS_XML_DATA_TYPE_ANY)
         {
             isExistAnyElem = true;
             break;
