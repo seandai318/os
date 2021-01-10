@@ -126,7 +126,6 @@ typedef struct {
     int minOccurs;          //>=0
     int maxOccurs;          // -1 means unbounded
 	uint32_t tag;			//uniquely identify a choice block
-	uint32_t xmlElementCount;	//how many times elements inside the choice block present in xml.  This is a helper function for xml parser, not needed by xsd	
 } osXsd_choiceInfo_t;
  	
 
@@ -140,7 +139,6 @@ typedef struct {
 
 typedef struct osXsdElement {
 	bool isRootElement;
-//	bool isElementAny;		//if this is <xsd:any>
 	osPointerLen_t elemName;
 	osXsd_schemaInfo_t* pSchema;
 	osPointerLen_t elemTypeName;

@@ -30,17 +30,24 @@
 
 //this data structure used to help xml parsing against its xsd
 typedef struct {
+	uint16_t choiceElemCount;   //the number of elements present in a choice block
+    uint16_t choiceTag;         //the choice tag that identifies a choice group
+} osXml_choiceInfo_t;
+
+typedef struct {
 	uint8_t childCount;			//how many times a child element appear in a CT
+//	osXml_choiceInfo_t* pXmlChoiceInfo;	//only applicable if a element is within a choice block, all elements in the same choice block share the same choiceInfo
 //	bool choiceElementUsed;		//only applicable if the child element is part of a choice, true if the child choice element shown in xml, false if not
-	uint16_t choiceTag;			//the choice tag that identifies a choice group
-} osXsd_assignedChildInfo_t;
+//	uint16_t choiceTag;			//the choice tag that identifies a choice group
+} osXml_assignedChildInfo_t;
 
 
 typedef struct osXsd_elemPointer {
     osXsdElement_t* pCurElem;       //the current working xsd element
     struct osXsd_elemPointer* pParentXsdPointer;    //the parent xsd pointer
     int curIdx;                     //which idx in assignedChildIdx[] that the xsd element is current processing, used in for the ordering presence of sequence deposition
-    osXsd_assignedChildInfo_t  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
+    osXml_assignedChildInfo_t  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
+	osList_t xmlChoiceList;			//each entry contains osXml_choiceInfo_t, repesents a choice block within a complex element
 	osXml_nsInfo_t* pXmlnsInfo;	//would not use osXsd_schemaInfo_t.targetNS here
 } osXsd_elemPointer_t;
 
@@ -74,12 +81,14 @@ typedef struct {
 
 static bool isExistXsdAnyElem(osXsd_elemPointer_t* pXsdPointer);
 static osXsdElement_t* osXml_getChildXsdElemByTag(osPointerLen_t* pTag, osXsd_elemPointer_t* pXsdPointer, osXmlElemDispType_e* pParentXsdDispType, int* listIdx);
+static osXml_choiceInfo_t* osXml_getChoiceInfo(osXsd_elemPointer_t* pParentXsdPointer, uint32_t choiceTag);
 static osXmlComplexType_t* osXsdPointer_getCT(osXsd_elemPointer_t* pXsdPointer);
 static osStatus_e osXml_getNsInfo(osList_t* pAttrNVList, osXml_nsInfo_t** ppNsInfo, osList_t* pNoXmlnsAttrList, osList_t* pgNSList);
 static bool osXml_isAliasExist(osPointerLen_t* pRootAlias, osList_t* pAliasList, osPointerLen_t** pRootNS);
 static void osXml_updateNsInfo(osXml_nsInfo_t* pNewNsInfo, osXml_nsInfo_t* pXsdPointerXmlnsInfo);
 static osListElement_t* osXml_isAliasMatch(osList_t* nsAliasList, osPointerLen_t* pnsAlias);
 static void osXmlNsInfo_cleanup(void* data);
+static void osXsd_elemPointer_cleanup(void* data);
 
 static osStatus_e osXml_parseInternal(osMBuf_t* pBuf, osPointerLen_t* xsdName, osXmlDataCallbackInfo_t* callbackInfo);
 static osStatus_e osXml_parseRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXml_parseStateInfo_t* pStateInfo);
@@ -297,7 +306,7 @@ static osStatus_e osXml_parseRootElem(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo,
 	osStatus_e status = OS_STATUS_OK;
     osList_t noXmlnsAttrList={};
 
-	osXsd_elemPointer_t* pXsdPointer = oszalloc(sizeof(osXsd_elemPointer_t), NULL);
+	osXsd_elemPointer_t* pXsdPointer = oszalloc(sizeof(osXsd_elemPointer_t), osXsd_elemPointer_cleanup);
     pXsdPointer->pParentXsdPointer = NULL;
     mdebug(LM_XMLP, "case <%r>, pParentXsdPointer=NULL", &pElemInfo->tag);
 
@@ -511,21 +520,34 @@ static osStatus_e osXml_parseSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
         }
     } //if(parentXsdDispType == OS_XML_ELEMENT_DISP_TYPE_SEQUENCE)
 
-    if(pCurElem->pChoiceInfo)
-    {
-        pCurElem->pChoiceInfo->xmlElementCount++;
-        pParentXsdPointer->assignedChildIdx[listIdx].choiceTag = pCurElem->pChoiceInfo->tag;
-    }
     ++pParentXsdPointer->assignedChildIdx[listIdx].childCount;
 
-    mdebug(LM_XMLP, "pParentXsdPointer->assignedChildIdx[%d].childCount=%d", listIdx, pParentXsdPointer->assignedChildIdx[listIdx].childCount);
+	//if a element is within a choice, setup xmlChoiceInfo
+    osXml_choiceInfo_t* pXmlChoiceInfo = NULL;
+    if(pCurElem->pChoiceInfo)
+    {
+		pXmlChoiceInfo = osXml_getChoiceInfo(pParentXsdPointer, pCurElem->pChoiceInfo->tag);
+		if(pXmlChoiceInfo)
+		{
+			pXmlChoiceInfo->choiceElemCount++;
+		}
+		else
+		{
+			pXmlChoiceInfo = oszalloc(sizeof(osXml_choiceInfo_t), NULL);
+            pXmlChoiceInfo->choiceElemCount = 1;
+            pXmlChoiceInfo->choiceTag = pCurElem->pChoiceInfo->tag;
+			osList_append(&pParentXsdPointer->xmlChoiceList, pXmlChoiceInfo);
+		}
+	}
+
+    mdebug(LM_XMLP, "pParentXsdPointer->assignedChildIdx[%d].childCount=%d for element(%r), choice element=%s", listIdx, pParentXsdPointer->assignedChildIdx[listIdx].childCount, &pCurElem->elemName, pCurElem->pChoiceInfo ? "yes" : "no");
 
     //check the maximum element occurrence is not exceeded
 	if(pCurElem->pChoiceInfo)
 	{
-		if(pCurElem->pChoiceInfo->maxOccurs != -1 && pCurElem->pChoiceInfo->xmlElementCount > pCurElem->pChoiceInfo->maxOccurs)
+		if(pCurElem->pChoiceInfo->maxOccurs != -1 && pXmlChoiceInfo->choiceElemCount > pCurElem->pChoiceInfo->maxOccurs)
 		{
-            logError("the choice block that contains element(%r) occurance(%d) exceeds the maxOccurs(%d).", &pXsdPointer->pCurElem->elemName, pCurElem->pChoiceInfo->xmlElementCount, pCurElem->pChoiceInfo->xmlElementCount);
+            logError("the choice block that contains element(%r) occurance(%d) exceeds the maxOccurs(%d).", &pXsdPointer->pCurElem->elemName, pXmlChoiceInfo->choiceElemCount, pCurElem->pChoiceInfo->maxOccurs);
             status = OS_ERROR_INVALID_VALUE;
             osfree(pXsdPointer);
             goto EXIT;
@@ -614,9 +636,10 @@ static osStatus_e osXml_parseEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
 
 		    if(pXsdElem->pChoiceInfo)
     		{
-        		if(pXsdElem->pChoiceInfo->xmlElementCount < pXsdElem->pChoiceInfo->minOccurs)
+				osXml_choiceInfo_t* pXmlChoiceInfo = osXml_getChoiceInfo(pParentXsdPointer, pXsdElem->pChoiceInfo->tag);
+				if(pXsdElem->pChoiceInfo->minOccurs > 0 && (!pXmlChoiceInfo || pXmlChoiceInfo->choiceElemCount < pXsdElem->pChoiceInfo->minOccurs))
         		{
-            		logError("the choice block that contains element(%r) occurance(%d) is less than the minOccurs(%d).", &pXsdElem->elemName, pXsdElem->pChoiceInfo->xmlElementCount, pXsdElem->pChoiceInfo->minOccurs);
+            		logError("the choice block that contains element(%r) occurance(%d) is less than the minOccurs(%d).", &pXsdElem->elemName, pXmlChoiceInfo ? pXmlChoiceInfo->choiceElemCount : -888, pXsdElem->pChoiceInfo->minOccurs);
 					osListElement_delete(pLE);
             		status = OS_ERROR_INVALID_VALUE;
             		goto EXIT;
@@ -700,7 +723,7 @@ static osStatus_e osXml_parseEOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
 
 EXIT:
     return status;
-}
+}	//osXml_parseEOT
 
 
 /* process <element_name /> */
@@ -1096,7 +1119,7 @@ osStatus_e osXml_getElemValue(osPointerLen_t* xsdName, osMBuf_t* xsdMBuf, osMBuf
         goto EXIT;
     }
 
-    logInfo("xml parse is done.");
+    logInfo("xml parse using xsd name(%r) is done.", xsdName);
 
 EXIT:
 	if(!isKeepXsdNsList)
@@ -1155,6 +1178,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 		isLeaf = false;
     }
 
+	//for all element callback case
 	if(callbackInfo->xmlCallback && callbackInfo->isAllElement)
 	{
 		osXmlData_t xmlData;
@@ -1211,6 +1235,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 		return status;
 	}
 
+	//for selective element callback case
     for(int i=0; i<callbackInfo->maxXmlDataSize; i++)
     {
         //that requires: within xmlData, the dataName has to be sorted from shortest to longest
@@ -1236,6 +1261,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 
         if(isNameMatch)
         {
+			bool inputXmlDataEOT = callbackInfo->xmlData[i].isEOT;
             osXmlDataType_e origElemDataType = pElement->dataType;
 
 			if(isLeaf && value)
@@ -1295,6 +1321,9 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 				//assign back to the original user expected data type, since callbackInfo->xmlData[i] may be reused if the xml use the same data type multiple times
 				callbackInfo->xmlData[i].dataType = origElemDataType;
 			}
+
+			//set back to the original EOT in the input xmlData
+			callbackInfo->xmlData[i].isEOT = inputXmlDataEOT;
             break;
         }
     } //for(int i=0; i<callbackInfo->maxXmlDataSize; i++)
@@ -1461,7 +1490,7 @@ EXIT:
 		*ppNsInfo = osfree(*ppNsInfo);	
 	}
 
-	//also store ppNsInfo in pgNSList, as ppNsInfo will be pointed by each child element
+	//also store ppNsInfo in pgNSList, as ppNsInfo will be pointed by each child element.
 	osList_append(pgNSList, *ppNsInfo);
 	return status;
 }
@@ -1563,6 +1592,30 @@ static osListElement_t* osXml_isAliasMatch(osList_t* nsAliasList, osPointerLen_t
 	return NULL;
 }
 
+
+static osXml_choiceInfo_t* osXml_getChoiceInfo(osXsd_elemPointer_t* pParentXsdPointer, uint32_t choiceTag)
+{
+	if(!pParentXsdPointer)
+	{
+		logError("null pointer, pParentXsdPointer.");
+		return NULL;
+	}
+
+	osListElement_t* pLE = pParentXsdPointer->xmlChoiceList.head;
+    while(pLE)
+    {
+        if(((osXml_choiceInfo_t*)pLE->data)->choiceTag == choiceTag)
+        {
+			return pLE->data;
+        }
+
+        pLE = pLE->next;
+    }
+
+	return NULL;
+}
+
+
 static void osXmlNsInfo_cleanup(void* data)
 {
 	if(!data)
@@ -1573,4 +1626,18 @@ static void osXmlNsInfo_cleanup(void* data)
 	osXml_nsInfo_t* pnsInfo = data;
 	//do not use osList_delete(), as nsAlias is seperately stored in gNSList
 	osList_clear(&pnsInfo->nsAliasList);
+}
+
+
+static void osXsd_elemPointer_cleanup(void* data)
+{
+    if(!data)
+    {
+        return;
+    }
+
+	osXsd_elemPointer_t* pElemPointer = data;
+	osList_delete(&pElemPointer->xmlChoiceList);
+
+	//this data structure only refers pXmlnsInfo, no need to free it.  Instead, the object that pXmlnsInfo points to is appended in a gNSList and will be freed over there 
 }

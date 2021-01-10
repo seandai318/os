@@ -99,5 +99,20 @@ static inline bool osSA_isInvalid(struct sockaddr_in* pSockAddr)
 	return false;
 }
 
+static inline void osIPPort_staticInit(osIpPort_t* pIpPort, bool isVPLDynamic, bool isSetVPLLen)
+{
+	if(!pIpPort)
+	{
+		return;
+	}
+
+	pIpPort->ip.pl.p = pIpPort->ipMem;
+	pIpPort->ip.pl.l = isSetVPLLen ? INET_ADDRSTRLEN : 0;
+	pIpPort->ip.isPDynamic = false;
+	pIpPort->ip.isVPLDynamic = isVPLDynamic;	
+	pIpPort->port = 0;	
+}
+
+
 
 #endif
