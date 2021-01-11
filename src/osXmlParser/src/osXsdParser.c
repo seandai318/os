@@ -1340,7 +1340,6 @@ EXIT:
  */
 bool osXsd_isExistSchema(osPointerLen_t* pTargetNS)
 {
-    osXsdNamespace_t* pNS = NULL;
 	osXsdNamespace_t* pNullNS = NULL;
 	bool isExistNS = false;
 
@@ -1371,7 +1370,7 @@ bool osXsd_isExistSchema(osPointerLen_t* pTargetNS)
 	//check if there is a schema in the null NS that matches the target name
 	if(pNullNS)
 	{
-        osListElement_t* pLE1 = pNS->schemaList.head;
+        osListElement_t* pLE1 = pNullNS->schemaList.head;
         while(pLE1)
         {
 			if(osPL_cmp((osPointerLen_t*)&((osXsdSchema_t*)pLE1->data)->schemaInfo.targetNS, pTargetNS) == 0)

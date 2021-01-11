@@ -945,12 +945,6 @@ void osVPL_copyPL(osVPointerLen_t *dest, osPointerLen_t *src)
         return;
     }
 
-    if(!dest->isPDynamic && dest->pl.l > 0)
-    {
-        //the dest has a fixed pl, do not override
-        return;
-    }
-
     //if dest already has enough pl memory, reuse it
     if(dest->pl.l >= src->l && dest->pl.p)
     {
@@ -963,9 +957,8 @@ void osVPL_copyPL(osVPointerLen_t *dest, osPointerLen_t *src)
         dest->pl.p = osmalloc(src->l, NULL);
         memcpy((char*)dest->pl.p, src->p, src->l);
         dest->pl.l = src->l;
+    	dest->isPDynamic = true;
     }
-
-    dest->isPDynamic = true;
 }
 
 

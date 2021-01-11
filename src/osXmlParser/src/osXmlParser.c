@@ -1152,6 +1152,8 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 		return OS_ERROR_NULL_POINTER;
 	}
 
+	mdebug(LM_XMLP, "for element(%r), value=%r, isEOT=%d.", &pElement->elemName, value, isEOT);
+ 
 	//leaf related check
 	if(value)
 	{
@@ -1172,6 +1174,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 
 		if(!callbackInfo->isAllowNoLeaf)
 		{
+			mdebug(LM_XMLP, "the element(%r) is not a leaf, but callback isAllowNoLeaf is false.", &pElement->elemName);
 			return status;
 		}
 
@@ -1306,6 +1309,7 @@ osStatus_e osXml_xmlCallback(osXsdElement_t* pElement, osPointerLen_t* value, co
 			{
 				if(!callbackInfo->xmlData[i].isEOT && isEOT)
 				{
+					mdebug(LM_XMLP, "the element(%r) is EOT, but app does not require EOT for this element.", &pElement->elemName);
 					return OS_STATUS_OK;
 				}
 
