@@ -1009,7 +1009,7 @@ void osPL_split(osPointerLen_t* srcPL, char splitter, osPointerLen_t* sub1, osPo
 }
 
 
-//remove preceeding empty space and trailing empry space
+//remove preceeding empty space and trailing empty space (SP or HT)
 void osPL_compact(osPointerLen_t* pl)
 {
 	if(!pl || pl->l == 0 || !pl->p)
@@ -1020,7 +1020,7 @@ void osPL_compact(osPointerLen_t* pl)
 	size_t startL = 0;
 	for(size_t i=0; i<pl->l; i++)
 	{
-		if(pl->p[i] != ' ')
+		if(pl->p[i] != ' ' && pl->p[i] != 0x09)
 		{
 			startL = i;
 			break;
@@ -1030,7 +1030,7 @@ void osPL_compact(osPointerLen_t* pl)
 	size_t stopL = pl->l;
 	for(size_t i=pl->l-1; i>=startL; i--)
 	{
-		if(pl->p[i] != ' ')
+		if(pl->p[i] != ' ' && pl->p[i] != 0x09)
 		{
 			pl->p = &pl->p[startL];
 			pl->l = i - startL + 1;
