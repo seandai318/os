@@ -63,10 +63,10 @@ typedef bool (*osListApply_h)(osListElement_t *le, void *arg);
  * Defines the list sort handler
  *
  * @param le1  Current list element
- * @param le2  Next list element
+ * @param le2  Next list element, the element originally appended after the current element
  * @param arg  Handler argument
  *
- * @return true if sorted, otherwise false
+ * @return true if le1 and le2 needs to switch, otherwise false
  */
 typedef bool (*osListSortHandler)(osListElement_t *le1, osListElement_t *le2, void *arg);
 
