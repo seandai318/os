@@ -47,7 +47,7 @@ typedef struct osXsd_elemPointer {
     struct osXsd_elemPointer* pParentXsdPointer;    //the parent xsd pointer
     int curIdx;                     //which idx in assignedChildIdx[] that the xsd element is current processing, used in for the ordering presence of sequence deposition
     osXml_assignedChildInfo_t  assignedChildIdx[OS_XSD_COMPLEX_TYPE_MAX_ALLOWED_CHILD_ELEM]; //if true, the list idx corresponding child element value has been assigned
-	osList_t xmlChoiceList;			//each entry contains osXml_choiceInfo_t, repesents a choice block within a complex element
+	osList_t xmlChoiceList;			//each entry contains osXml_choiceInfo_t, repesents a choice block within a complex element (the choce blocks of child elements)
 	osXml_nsInfo_t* pXmlnsInfo;	//would not use osXsd_schemaInfo_t.targetNS here
 } osXsd_elemPointer_t;
 
@@ -483,6 +483,13 @@ static osStatus_e osXml_parseSOT(osMBuf_t* pBuf, osXmlTagInfo_t* pElemInfo, osXm
 
 					//the gap elem is a choice element, and the choice has minOccurs = 0
 					if(pXsdElem->pChoiceInfo->minOccurs == 0)
+					{
+						continue;
+					}
+
+					//the gap elem is within a choice block, and the choice block already has at least one element present
+					osXml_choiceInfo_t* pXmlChoiceInfo = osXml_getChoiceInfo(pParentXsdPointer, pXsdElem->pChoiceInfo->tag);
+					if(pXmlChoiceInfo &&  pXmlChoiceInfo->choiceElemCount > 0)
 					{
 						continue;
 					}

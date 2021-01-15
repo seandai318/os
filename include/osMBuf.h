@@ -101,6 +101,25 @@ void osMBuf_setPos(osMBuf_t *mb, size_t pos);
 ssize_t osMbuf_findMatch(osMBuf_t* pBuf, osPointerLen_t* pattern);
 ssize_t osMbuf_findValue(osMBuf_t* pBuf, char tag1, char tag2, bool isExclSpace, osPointerLen_t* pValue);
 
+
+//move the mbuf pos until hit the specified mark character.  the pos points to the mark character
+static inline void osMBuf_skipUntil(osMBuf_t *mb, char mark)
+{
+	if(!mb || mb->pos >= mb->end)
+	{
+		return;
+	}
+
+	for(mb->pos; mb->pos < mb->end; mb->pos++)
+	{
+		if(mb->buf[mb->pos] == mark)
+		{
+			break;
+		}
+	}
+}
+
+
 /**
  * Get the buffer from the current position
  *
