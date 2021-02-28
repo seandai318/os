@@ -932,6 +932,7 @@ int osMBuf_debug(FILE* pf, const osMBuf_t *mb)
 }
 
 
+#if 0
 /**
  * Set absolute position
  *
@@ -943,6 +944,8 @@ void osMBuf_setPos(osMBuf_t *mb, size_t pos)
     mb->pos = pos;
     MBUF_CHECK_POS(mb);
 }
+
+#endif
 
 void osMBuf_advance(osMBuf_t *mb, ssize_t n)
 {

@@ -97,7 +97,7 @@ int      osMBuf_strdup(osMBuf_t *mb, char **strp, size_t len);
 int      osMBuf_fill(osMBuf_t *mb, uint8_t c, size_t n);
 int      osMBuf_debug(FILE* pf, const osMBuf_t *mb);
 void osMBuf_advance(osMBuf_t *mb, ssize_t n);
-void osMBuf_setPos(osMBuf_t *mb, size_t pos);
+static void osMBuf_setPos(osMBuf_t *mb, size_t pos);
 ssize_t osMbuf_findMatch(osMBuf_t* pBuf, osPointerLen_t* pattern);
 ssize_t osMbuf_findValue(osMBuf_t* pBuf, char tag1, char tag2, bool isExclSpace, osPointerLen_t* pValue);
 
@@ -210,6 +210,11 @@ static inline void osMBuf_rewind(osMBuf_t *mb)
 	mb->pos = mb->end = 0;
 }
 
+
+static inline void osMBuf_setPos(osMBuf_t *mb, size_t pos)
+{
+    mb->pos = pos;
+}
 
 /**
  * Set position to the end of the buffer

@@ -70,6 +70,10 @@ osHash_t* osHash_create(uint32_t bsize);
 
 //osPlHash_addUserData and osPlHash_getUserData has to be used in pair
 osListElement_t* osPlHash_addUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase, void* userData);
+//this is useful when app wants to create a hash element, but want to add user data later
+osListElement_t* osPlHash_addEmptyUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase);
+//set a user data to a previous empty hash element
+osStatus_e osPlHash_setEmptyUserData(osListElement_t* pHashLE, void* userData);
 void* osPlHash_getUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase);
 void* osPlHash_getUserDataByLE(osHash_t *h, osListElement_t* pHashLE);
 osListElement_t* osPlHash_getElement(osHash_t *h, osPointerLen_t* plKey, bool isCase);

@@ -144,8 +144,6 @@ void* osHash_replaceUserData(osHash_t *h, osListElement_t* pHashLE, void* newDat
 
 osListElement_t* osPlHash_addUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase, void* userData)
 {
-	osStatus_e status = OS_STATUS_OK;
-
 	if(!h || !plKey || !userData)
 	{
 		logError("null pointer, h=%p, plKey=%p, userData=%p.", h, plKey, userData);
@@ -158,7 +156,6 @@ osListElement_t* osPlHash_addUserData(osHash_t *h, osPointerLen_t* plKey, bool i
     if(!pHashData)
     {
         logError("fails to allocate pHashData.");
-        status = OS_ERROR_MEMORY_ALLOC_FAILURE;
         goto EXIT;
     }
 
@@ -179,6 +176,62 @@ osListElement_t* osPlHash_addUserData(osHash_t *h, osPointerLen_t* plKey, bool i
 
 EXIT:
 	return pLE;
+}
+
+
+osListElement_t* osPlHash_addEmptyUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase)
+{
+    if(!h || !plKey)
+    {
+        logError("null pointer, h=%p, plKey=%p.", h, plKey);
+        return NULL;
+    }
+
+    osListElement_t* pLE = NULL;
+
+    osHashData_t* pHashData = oszalloc(sizeof(osHashData_t), NULL);
+    if(!pHashData)
+    {
+        logError("fails to allocate pHashData.");
+        goto EXIT;
+    }
+
+    uint32_t key = osHash_getKeyPL(plKey, isCase);
+
+    pHashData->hashKeyType = OSHASHKEY_STR;
+    pHashData->hashKeyStr.pl = *plKey;
+    pHashData->hashKeyStr.isCase = isCase;
+    pHashData->pData = NULL;
+
+    pLE = osHash_addKey(h, key, pHashData);
+    if(!pLE)
+    {
+        logError("fails to osHash_addKey for plKwy(%r).", plKey);
+        osfree(pHashData);
+        goto EXIT;
+    }
+
+EXIT:
+    return pLE;
+}
+
+
+//set a user data to a previous empty hash element
+osStatus_e osPlHash_setEmptyUserData(osListElement_t* pHashLE, void* userData)
+{
+	osStatus_e status = OS_STATUS_OK;
+
+	if(!pHashLE || !userData)
+	{
+		logError("null pointer, pHashLE=%p, userData=%p.", pHashLE, userData);
+		status = OS_ERROR_NULL_POINTER;
+		goto EXIT;
+	}
+
+	((osHashData_t*)pHashLE->data)->pData = userData;
+
+EXIT:
+	return status;
 }
 
 
