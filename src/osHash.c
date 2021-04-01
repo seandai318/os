@@ -243,6 +243,11 @@ void* osPlHash_getUserData(osHash_t *h, osPointerLen_t* plKey, bool isCase)
         return NULL;
     }
 
+	if(!plKey->p || !plKey->l)
+	{
+		return NULL;
+	}
+
 	osStrKeyInfo_t strKey = {*plKey, isCase};
 	osListElement_t* pHashLE = osHash_lookupByKey(h, &strKey, OSHASHKEY_STR);
     if(!pHashLE)
@@ -609,7 +614,11 @@ osListElement_t* osHash_lookupByKey(const osHash_t *h, void* key, osHashKeyType_
 	switch(keyType)
 	{
 		case OSHASHKEY_STR:
-			hashData.hashKeyStr = *(osStrKeyInfo_t*)key;
+            hashData.hashKeyStr = *(osStrKeyInfo_t*)key;
+			if(!hashData.hashKeyStr.pl.p || !hashData.hashKeyStr.pl.l)
+			{
+				return NULL;
+			}
             hashKey = osHash_getKeyStr(hashData.hashKeyStr.pl.p, hashData.hashKeyStr.pl.l, hashData.hashKeyStr.isCase);
 			break;
 		case OSHASHKEY_INT:
@@ -731,7 +740,6 @@ void osHash_clear(osHash_t *h)
 	}
 }
 
-	
 
 uint32_t osHash_getKeyStr(const char* str, size_t len, bool isCase)
 {
@@ -762,6 +770,7 @@ uint32_t osHash_getKeyStr(const char* str, size_t len, bool isCase)
 
 	return hashKey;
 }
+
 
 uint32_t osHash_getKeyPL(const osPointerLen_t* pPL, bool isCase)
 {

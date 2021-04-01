@@ -105,6 +105,7 @@ bool osIsIpv4(osPointerLen_t* pAddr)
 	for(int i=0; i<4; i++)
 	{
 		isFirstDigit = true;
+		isDotFound = false;
 		//check insdie each segement
 		for(int j=0; j<3; j++)
 		{
@@ -125,6 +126,7 @@ bool osIsIpv4(osPointerLen_t* pAddr)
 				if(pAddr->p[pos] == '.')
 				{
 					isDotFound = true;
+					++pos;
 					break;
 				}
 				else if(pAddr->p[pos] < '0' || pAddr->p[pos] > '9')
