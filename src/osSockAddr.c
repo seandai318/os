@@ -16,6 +16,13 @@ osStatus_e osConvertPLton(const osIpPort_t* pIpPort, bool isIncludePort, struct 
     osStatus_e status = OS_STATUS_OK;
     char ip[INET_ADDRSTRLEN]={};
 
+    if(!pIpPort || !pSockAddr)
+    {
+        logError("null pointer, pIpPort=%p, pSockAddr=%p.", pIpPort, pSockAddr);
+        status = OS_ERROR_NULL_POINTER;
+        goto EXIT;
+    }
+
     pSockAddr->sin_family = AF_INET;
     if(isIncludePort)
     {
@@ -29,6 +36,48 @@ osStatus_e osConvertPLton(const osIpPort_t* pIpPort, bool isIncludePort, struct 
     if(osPL_strcpy(&pIpPort->ip.pl, ip, INET_ADDRSTRLEN) != 0)
     {
         logError("fails to perform osPL_strcpy for IP(%r).", &pIpPort->ip.pl);
+        status = OS_ERROR_INVALID_VALUE;
+        goto EXIT;
+    }
+
+    if(inet_pton(AF_INET, ip, &pSockAddr->sin_addr.s_addr) != 1)
+    {
+        logError("fails to perform inet_pton for IP(%s), errno=%d.", ip, errno);
+        status = OS_ERROR_INVALID_VALUE;
+        goto EXIT;
+    }
+
+EXIT:
+    return status;
+}
+
+
+osStatus_e osConvertPLton1(const osPointerLen_t plIp, int port, struct sockaddr_in* pSockAddr)
+{
+    osStatus_e status = OS_STATUS_OK;
+
+	if(!pSockAddr)
+	{
+		logError("null pointer, pSockAddr.");
+		status = OS_ERROR_NULL_POINTER;
+		goto EXIT;
+	}
+
+    char ip[INET_ADDRSTRLEN]={};
+
+    pSockAddr->sin_family = AF_INET;
+    if(port)
+    {
+        pSockAddr->sin_port = htons(port);
+    }
+    else
+    {
+        pSockAddr->sin_port = 0;
+    }
+
+    if(osPL_strcpy(&plIp, ip, INET_ADDRSTRLEN) != 0)
+    {
+        logError("fails to perform osPL_strcpy for IP(%r).", &plIp);
         status = OS_ERROR_INVALID_VALUE;
         goto EXIT;
     }
